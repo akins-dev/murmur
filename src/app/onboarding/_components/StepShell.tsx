@@ -1,28 +1,35 @@
 /**
  * SOURCE OF TRUTH KEYWORDS: StepShell, StepShellProps, StepDots, onboarding-layout
- * WHAT:  The frame every onboarding step renders inside: heading, one line of
- *        copy, the step's body, its primary action, and the progress dots.
- * WHY:   Three steps that each invent their own layout is three chances to move
- *        the button and make the flow feel like three different apps. The dots
- *        are the only progress indicator: a numbered "step 2 of 3" invites the
- *        question of what happens if you stop, and the answer here is nothing
- *        bad — every step is independently recoverable from Settings.
+ * WHAT:  The frame every setup step renders inside: heading, one line of copy,
+ *        the step's body, and its primary action.
+ * WHY:   Steps that each invent their own layout is a chance to move the button
+ *        and make the flow feel like several different apps.
+ *
+ *        THERE ARE NO PROGRESS DOTS HERE, and their removal fixed a real
+ *        problem rather than tidying one. The tour that now opens onboarding
+ *        has its own three dots — the slider the operator asked for — so a
+ *        second three-dot row immediately afterwards read as progress RESETTING
+ *        from three-of-three back to one-of-three.
+ *
+ *        They were also claiming a certainty this flow does not have. These
+ *        steps are DERIVED from backend state, not a fixed-length sequence: a
+ *        user who already granted the microphone never sees that screen, so
+ *        "1 of 3" was announcing a length that varies per machine. Nothing is
+ *        lost by dropping them, because every step here is independently
+ *        recoverable from Settings.
  * WHERE: Wraps PermissionStep, ModelStep and HotkeyStep.
  */
 
 import type { ReactNode } from "react";
-import { cn } from "@/lib/utils";
 
 export interface StepShellProps {
   title: string;
   description: string;
   children: ReactNode;
   action?: ReactNode;
-  stepIndex: number;
-  stepCount: number;
 }
 
-export function StepShell({ title, description, children, action, stepIndex, stepCount }: StepShellProps) {
+export function StepShell({ title, description, children, action }: StepShellProps) {
   return (
     <section className="flex h-full flex-col items-center justify-center gap-6 px-8">
       <header className="flex flex-col items-center gap-2 text-center">
@@ -40,17 +47,6 @@ export function StepShell({ title, description, children, action, stepIndex, ste
 
       {action ? <div className="flex items-center gap-2">{action}</div> : null}
 
-      <div className="flex items-center gap-2" aria-hidden="true">
-        {Array.from({ length: stepCount }, (_, index) => (
-          <span
-            key={index}
-            className={cn(
-              "size-[var(--pill-dot-size)] rounded-pill transition-colors",
-              index === stepIndex ? "bg-text-primary" : "bg-sunken",
-            )}
-          />
-        ))}
-      </div>
     </section>
   );
 }

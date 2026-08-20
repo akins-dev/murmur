@@ -46,8 +46,6 @@ import { ModelStep } from "./_components/ModelStep";
 import { HotkeyStep } from "./_components/HotkeyStep";
 import { TourStep } from "./_components/TourStep";
 
-const STEP_COUNT = 3;
-
 /** Declared by the Onboarding capability in the registry. Named here because
  *  "which setting means first run is over" is a contract between the two
  *  windows, and it is the only settings key the frontend has to know. */
@@ -123,8 +121,6 @@ export function Onboarding() {
         <TourStep hotkey={hotkey} onDone={() => setToured(true)} />
       ) : !micGranted ? (
         <StepShell
-          stepIndex={0}
-          stepCount={STEP_COUNT}
           title="Two permissions"
           description="Murmur runs entirely on your Mac. It needs the microphone to hear you, and accessibility to paste for you."
         >
@@ -132,8 +128,6 @@ export function Onboarding() {
         </StepShell>
       ) : !modelReady && model ? (
         <StepShell
-          stepIndex={1}
-          stepCount={STEP_COUNT}
           title="One model to download"
           description="This runs on your machine, so the model lives on your disk. It is downloaded once."
         >
@@ -141,8 +135,6 @@ export function Onboarding() {
         </StepShell>
       ) : (
         <StepShell
-          stepIndex={2}
-          stepCount={STEP_COUNT}
           title="Try it"
           description="Press the hotkey anywhere, say something, and press it again."
           action={

@@ -57,7 +57,7 @@ export function PageShell({ title, actions, children }: PageShellProps) {
   };
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col">
+    <div className="relative flex min-h-0 flex-1 flex-col">
       <header
         data-tauri-drag-region
         onWheel={forwardWheel}

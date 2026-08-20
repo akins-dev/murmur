@@ -147,4 +147,14 @@ jobs:
           # Writes latest.json from the signed artifacts. Without this the
           # release carries a DMG nobody's updater can see.
           includeUpdaterJson: true
-          args: --target universal-apple-darwin
+          # `createUpdaterArtifacts` is FALSE in tauri.conf.json and turned on
+          # here, which is the only place a signing key exists.
+          #
+          # It has to default off, and the reason is worth stating: the moment a
+          # pubkey is present in the config, Tauri refuses to build AT ALL
+          # without the matching private key — "a public key has been found, but
+          # no private key". That broke CI's plain build job and every local
+          # `pnpm tauri build` run by anyone who does not hold the key, which is
+          # everyone except whoever cut the last release. Contributors should be
+          # able to build the app; only a release needs to be signable.
+          args: --target universal-apple-darwin --config '{"bundle":{"createUpdaterArtifacts":true}}'

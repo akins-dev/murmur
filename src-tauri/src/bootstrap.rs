@@ -273,6 +273,28 @@ fn default_model_id() -> crate::types::ModelId {
 }
 
 /**
+ * SOURCE OF TRUTH KEYWORDS: worth_warming
+ * WHAT:  Whether a model's state means there is something on disk worth
+ *        verifying and loading at startup.
+ * WHY:   Extracted so the one decision that matters here can be tested. The
+ *        warm-up runs on a background thread holding an AppHandle, which no
+ *        unit test can build, so leaving this inline would have meant the
+ *        behaviour was only checkable by launching the app — and the bug it
+ *        replaces was invisible precisely because nobody launches a fresh
+ *        install twice.
+ *
+ *        `Failed` counts as worth trying: the recorded failure may have been a
+ *        bad hash on a file that has since been replaced by hand, and `ensure`
+ *        re-hashes rather than trusting the verdict. `NotDownloaded` is the one
+ *        state that must return false, because acting on it means DOWNLOADING,
+ *        and choosing what to download is onboarding's job.
+ * WHERE: prepare_engine's warm-up thread.
+ */
+fn worth_warming(state: &crate::types::ModelState) -> bool {
+    !matches!(state, crate::types::ModelState::NotDownloaded)
+}
+
+/**
  * SOURCE OF TRUTH KEYWORDS: prepare_engine
  * WHAT:  Loads the model and warms its Metal context, off the main thread.
  * WHY:   `prepare()` blocks for well over a second, and it must NEVER be on the
@@ -293,15 +315,41 @@ fn prepare_engine(
     std::thread::Builder::new()
         .name("murmur-engine-warmup".into())
         .spawn(move || {
-            // Verify BEFORE loading. Until this existed nothing hashed the model
-            // on the startup path — `ensure` was only ever reached by an explicit
-            // download — so a returning user's engine was handed a file on
-            // presence alone, which is exactly what "verify by hash, never by
-            // presence" exists to prevent. This thread already waits on a ~1.5s
-            // model load, so the hash costs nothing anyone is watching.
-            let verified = tauri::async_runtime::block_on(models.ensure(&model_id));
-            if let Err(err) = verified {
-                tracing::info!(error = %err, "model not available yet; onboarding will fetch it");
+            /*
+             * SOURCE OF TRUTH KEYWORDS: warm_up_never_downloads
+             * ASK FIRST, and do not download. `status` reports what is on disk
+             * without fetching anything; `ensure` fetches. Calling `ensure`
+             * here meant a fresh install began pulling 574MB of the DEFAULT
+             * model the moment the app launched — before onboarding had asked
+             * the user which model they wanted. Pick a different one and you
+             * paid for two.
+             *
+             * The comment that used to sit here said "onboarding will fetch
+             * it", describing behaviour this code did not have. Downloading is
+             * onboarding's job because onboarding is where the choice is made,
+             * and this thread has no business pre-empting it.
+             *
+             * Once the file IS present, `ensure` still runs, and that part is
+             * deliberate: it hashes before the engine is handed a path, which
+             * is what "verify by hash, never by presence" means. For an
+             * installed model it downloads nothing, and this thread is already
+             * waiting on a ~1.5s load, so the hash costs nothing anyone is
+             * watching.
+             */
+            let installed = tauri::async_runtime::block_on(models.status(&model_id))
+                .map(|status| worth_warming(&status.state))
+                .unwrap_or(false);
+
+            if !installed {
+                tracing::info!(
+                    model = model_id.as_str(),
+                    "no model on disk yet; leaving the download to onboarding"
+                );
+                return;
+            }
+
+            if let Err(err) = tauri::async_runtime::block_on(models.ensure(&model_id)) {
+                tracing::info!(error = %err, "model could not be verified; onboarding will fetch it");
                 return;
             }
 
@@ -1046,6 +1094,43 @@ fn on_escape(app: &AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /**
+     * SOURCE OF TRUTH KEYWORDS: the_warm_up_never_downloads
+     * WHAT:  Startup warm-up acts only on a model that is already on disk.
+     * WHY:   The failure this guards is silent and expensive, and only happens
+     *        on a machine nobody re-tests: a FRESH install. The warm-up used to
+     *        call `ensure`, which downloads, so 574MB of the default model
+     *        started arriving before onboarding had asked which model the user
+     *        wanted. Choose a different one and they paid for two.
+     *
+     *        `NotDownloaded` is the only state that must be false. If that ever
+     *        flips, the app silently starts pre-empting the user's choice again
+     *        and the only symptom is a bandwidth bill.
+     */
+    #[test]
+    fn the_startup_warm_up_never_acts_on_a_missing_model() {
+        use crate::types::ModelState;
+
+        assert!(
+            !worth_warming(&ModelState::NotDownloaded),
+            "the warm-up would download a model the user has not chosen yet"
+        );
+
+        for state in [
+            ModelState::Ready,
+            ModelState::Verifying,
+            ModelState::Optimizing,
+            ModelState::Failed {
+                message: "a stale verdict on a file that may since have changed".into(),
+            },
+        ] {
+            assert!(
+                worth_warming(&state),
+                "{state:?} has a file on disk and should be verified at startup"
+            );
+        }
+    }
 
     /**
      * SOURCE OF TRUTH KEYWORDS: constructors_do_not_need_a_runtime,

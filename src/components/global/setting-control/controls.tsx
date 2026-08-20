@@ -172,13 +172,13 @@ function isModifierOnlyValue(value: string | null): boolean {
  *        one the user meant instead of guessing.
  *
  *        THE HINT TEACHES THE GESTURE, because the gesture is not what anyone
- *        assumes. A bare modifier fires on a DOUBLE-TAP, not a hold and not a
- *        single press — a single tap would fire every time you reach for Option
- *        to peek at a menu. Someone who binds ⌥, presses it once and sees
- *        nothing happen will report the hotkey as broken, so the moment they
- *        set it is the moment they have to be told. The hint is derived from
- *        the CURRENT VALUE rather than shown once after capture, so it is still
- *        there when they come back to this screen a week later.
+ *        assumes. A bare modifier TOGGLES on a single tap — press once to
+ *        start, once more to stop — where every other binding in the app is
+ *        hold-to-talk. Someone who binds ⌥ and then holds it is using it wrong
+ *        and will report the hotkey as broken, so the moment they set it is the
+ *        moment they have to be told. The hint is derived from the CURRENT
+ *        VALUE rather than shown once after capture, so it is still there when
+ *        they come back to this screen a week later.
  * WHERE: Rendered by SettingControl for SettingKind::Hotkey.
  */
 export function HotkeyControl({ setting }: { setting: HotkeySetting }) {
@@ -266,10 +266,13 @@ export function HotkeyControl({ setting }: { setting: HotkeySetting }) {
     };
   }, [armed, setting]);
 
-  // Says what to DO. A bare modifier does nothing on a single press, so naming
-  // the binding back at the user would be the one thing that does not help.
+  // Says what to DO, not what the binding is. A bare modifier is a TOGGLE — one
+  // tap starts, one tap stops — and nothing about a key called "Option" tells
+  // you that, so the moment it is set is the moment to say it. Derived from the
+  // current value rather than shown once after capture, so it is still there
+  // when he comes back to this screen next week.
   const gestureHint = isModifierOnlyValue(setting.value)
-    ? `Double-tap ${setting.value} to start dictating.`
+    ? `Tap ${setting.value} to start dictating, and again to stop.`
     : null;
 
   return (

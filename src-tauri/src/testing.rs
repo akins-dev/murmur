@@ -44,8 +44,16 @@ pub fn read_wav_f32(path: &Path) -> Option<Vec<f32>> {
             let end = body.saturating_add(size).min(bytes.len());
             return Some(
                 bytes[body..end]
-                    .chunks_exact(4)
-                    .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                    // `as_chunks` rather than `chunks_exact(4)`: a constant
+                    // chunk size gives a fixed-size array, so the four indexes
+                    // below are checked at compile time instead of at runtime.
+                    // Newer clippy denies the old form for exactly that reason,
+                    // which is how CI caught this on a toolchain ahead of the
+                    // one on this machine.
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|c| f32::from_le_bytes(*c))
                     .collect(),
             );
         }

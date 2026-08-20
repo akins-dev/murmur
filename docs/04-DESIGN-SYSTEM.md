@@ -270,6 +270,28 @@ Framer needs numbers, and a component may not carry one. Every spring in the tab
 
 ## 8. Dashboard layout
 
+### The update notice
+
+A slim bar docked BELOW the scroll area, on every dashboard page, absent entirely until there is a
+newer version.
+
+- **It must never take the screen.** The person using this app is usually dictating into something
+  else and the dashboard may not even be open. An update prompt that interrupts that is worse than
+  one found late, because the product's whole promise is "talk and the words appear" and anything
+  stealing focus mid-sentence breaks it. Not a modal, not a toast, not an overlay — docked below the
+  content so it covers nothing and moves nothing.
+- **It asks as well as listens**, and that is what makes the feature visible at all. The backend
+  checks at launch and every 24h and emits an event, but the dashboard opens from the menu bar and
+  may not exist when that event fires — a listener alone would miss nearly every one and the feature
+  would appear broken while working perfectly. So: `check_for_update` once on mount for the answer
+  that already exists, plus the event for a check that lands while it is open. Same shape as the
+  pill — a command for first paint, events after that.
+- **The restart is in the button label**, not in a sentence beside it. Installing swaps the running
+  app, and the label is the last thing read before committing.
+- The button is a bordered secondary. The inverted primary fill is reserved for the app's one
+  primary action, and a bar whose entire purpose is to stay quiet must not carry the loudest control
+  in the product.
+
 ### Registry-declared icons
 
 `NavDef.icon` is a STRING that crosses from Rust into TypeScript and is resolved through a
@@ -517,6 +539,13 @@ The §4 scale is a 4px grid, so it is published as Tailwind's spacing base (`--s
 The app had no identity, and that is why it read as an MVP: nothing on screen was specific to *this* product.
 
 ### The mark
+
+**Onboarding shows the mark on the tour and nowhere else.** The three tour slides introduce the
+product; the setup steps that follow do not repeat it. A fourth consecutive screen carrying the logo
+turns an identity into a watermark — the "first screen only" rule did not change, the first screen
+did. The setup steps also carry **no progress dots**: they are derived from backend state rather than
+a fixed-length sequence, so a "1 of 3" was announcing a length that varies per machine, and a second
+three-dot row immediately after the tour's read as progress resetting.
 
 **One mark, two renderings, and they are asserted to match by geometry rather than by memory.**
 `assets/mark.svg` is the file everything outside the webview consumes — the menu-bar glyph and the

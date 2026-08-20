@@ -64,7 +64,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZBMkYyOTVDNEU3QjFBQjkKUldTNUdudE9YQ2t2YW83T2lkZ3hxOGRJMU5DKzdjdllBMXB6V0E1UlFjbnVOVGZmaFBpS3crRGsK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJBOTgyMjc1RjE3RUVENTgKUldSWTdYN3hkU0tZdWxuS1QxWDdvUHIvQzk3dVc3Vm1hNkRvZERWcUJ2NFhxeTBJNWdxWlp2RDgK",
       "endpoints": [
         "https://github.com/webprodigies/murmur/releases/latest/download/latest.json"
       ]
@@ -76,7 +76,7 @@
       "dmg",
       "app"
     ],
-    "createUpdaterArtifacts": true,
+    "createUpdaterArtifacts": false,
     "category": "Productivity",
     "shortDescription": "Local-first speech to text.",
     "longDescription": "Press a hotkey, talk, press it again \u2014 your words are pasted where you were typing. Runs entirely on your machine.",

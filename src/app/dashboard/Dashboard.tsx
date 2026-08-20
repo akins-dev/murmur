@@ -22,6 +22,7 @@ import { useSettings } from "./use-settings";
 import { EmptyState, ErrorBoundary, ErrorSurface, Skeleton, ScrollArea } from "@/components/global";
 import { Sidebar } from "./_components/Sidebar";
 import { PageShell } from "./_components/PageShell";
+import { UpdateNotice } from "./_components/UpdateNotice";
 import { BillingView } from "./billing";
 import { navigateTo, useHashRoute } from "./use-hash-route";
 import { StatsView } from "./stats/StatsView";
@@ -108,7 +109,7 @@ export function Dashboard() {
         />
       </div>
 
-      <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 flex-1 flex-col">
         <PageShell title={activeTitle}>
         <ErrorBoundary
           key={activeRoute}
@@ -140,6 +141,7 @@ export function Dashboard() {
           )}
         </ErrorBoundary>
         </PageShell>
+        <UpdateNotice />
       </div>
     </main>
   );
