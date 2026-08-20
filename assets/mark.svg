@@ -1,0 +1,25 @@
+<!--
+  SOURCE OF TRUTH KEYWORDS: mark.svg, identity-mark, tray-icon, bundle-icon
+  WHAT:  Murmur's identity mark (docs/04 §12) — the waveform at rest, five
+         rounded bars, centre-weighted, on a 24x24 grid.
+  WHY:   The same shape src/components/global/mark renders in the UI, authored
+         once here for everything outside the webview: the menu-bar glyph and
+         the .icns/.ico bundle icons. Geometry matches §12 exactly — 2px bars,
+         2px gaps, heights 6/12/18/12/6 — so the icon and the in-app mark are
+         one object and not two drawings that drift.
+
+         `fill="currentColor"` is deliberate: as a macOS template image the
+         system recolours it for light, dark and the pressed menu-bar state, so
+         the glyph must carry NO colour of its own. It is never ember — ember
+         means a session is live (§1.3, §12).
+  WHERE: Consumed by src-tauri for the tray icon and the bundle icons. The web
+         layer draws the same shape from tokens rather than importing this, so
+         a size change stays a token change.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+  <rect x="3"  y="9"  width="2" height="6"  rx="1"/>
+  <rect x="7"  y="6"  width="2" height="12" rx="1"/>
+  <rect x="11" y="3"  width="2" height="18" rx="1"/>
+  <rect x="15" y="6"  width="2" height="12" rx="1"/>
+  <rect x="19" y="9"  width="2" height="6"  rx="1"/>
+</svg>

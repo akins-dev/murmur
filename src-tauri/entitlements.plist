@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SOURCE OF TRUTH KEYWORDS: entitlements, audio-input, hardened-runtime,
+    microphone, com.apple.security.device.audio-input
+  WHAT:  The macOS entitlements the signed bundle carries.
+  WHY:   THIS FILE IS WHY THE MICROPHONE WORKS. Signing with a real identity
+         turns on Hardened Runtime, and under Hardened Runtime the microphone
+         is blocked at the OS level unless the app declares
+         `com.apple.security.device.audio-input` — no matter what the user has
+         toggled in Privacy & Security.
+
+         The failure that produced this file: the app was signed with an
+         identity, gained Hardened Runtime, carried no entitlements, and then
+         recorded pure silence. Every visible signal said it should work —
+         Murmur was listed and enabled under Microphone, the device opened, the
+         pipeline ran — and the transcript came back empty. The permission
+         check even reported NotDetermined, because a Hardened Runtime process
+         without the entitlement cannot meaningfully ask.
+
+         Deliberately minimal. The app is NOT sandboxed, so network access,
+         the model download and the application-support directory need nothing
+         declared. Accessibility is a TCC grant rather than an entitlement.
+         Every entry here has to earn its place; an entitlement that is not
+         needed is attack surface that is not needed.
+  WHERE: Referenced by bundle.macOS.entitlements in tauri.conf.json. Asserted by
+         the bundle test in src/bootstrap.rs so it cannot be silently dropped.
+-->
+<plist version="1.0">
+<dict>
+    <!-- Microphone capture through CoreAudio (cpal). Without this the app
+         records silence under Hardened Runtime. -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+</dict>
+</plist>

@@ -1,0 +1,150 @@
+# SOURCE OF TRUTH KEYWORDS: release, tauri-action, universal-apple-darwin,
+#   TAURI_SIGNING_PRIVATE_KEY, latest.json, notarization, updater-artifacts
+# WHAT:  Tag `v*` -> universal macOS build -> signed updater artifacts -> a
+#        GitHub Release carrying the DMG and latest.json.
+# WHY:   The signature is the whole security model of the updater: the app will
+#        refuse any bundle that does not verify against the public key baked
+#        into tauri.conf.json, so the private key never leaves GitHub Secrets
+#        and never enters the repository. Losing it is unrecoverable — no
+#        existing install can ever be updated again — which is why it is a
+#        secret and not a file.
+#
+#        NOTARIZATION is deliberately pre-wired rather than left to a later
+#        restructure (docs/02 §12 locks this in). The Apple variables are
+#        already passed through to the build below; when they are empty Tauri
+#        skips signing and notarization entirely, and when the secrets exist it
+#        performs both. Turning it on is therefore adding repository secrets
+#        and nothing else — no new step, no new job, no reordering.
+# WHERE: Triggered by pushing a tag. Consumes the keypair generated with
+#        `pnpm tauri signer generate`; feeds the endpoint configured in
+#        src-tauri/tauri.conf.json under plugins.updater.endpoints.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  # Lets a release be re-cut without moving a tag, which is the usual reason a
+  # release job gets run twice.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build (e.g. v0.1.0)"
+        required: true
+        type: string
+
+# The job writes a Release, so it needs write access to repository contents.
+permissions:
+  contents: write
+
+# A second tag pushed while the first is still building would race to publish
+# the same latest.json. Queue instead, and never cancel a half-published run.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  macos:
+    # macOS 14+ runners are Apple silicon. Both halves of the universal binary
+    # are cross-compiled from here, which is why the x86_64 target is added
+    # explicitly below.
+    runs-on: macos-14
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install Rust with both macOS targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+
+      # Keyed on the lockfile AND the target, so the universal build does not
+      # keep evicting a cache built for one architecture.
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: universal-apple-darwin
+
+      - run: pnpm install --frozen-lockfile
+
+      # Fails in seconds rather than after a ~40 minute universal build. A
+      # tagged release that dies at the signing step has already burned the
+      # build, and the tag has to be re-cut to retry.
+      - name: Verify the signing key is present
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY is not set. Without it the"
+            echo "::error::build produces artifacts every installed copy of"
+            echo "::error::Murmur will refuse, and the failure would only show"
+            echo "::error::up at update time on a user's machine."
+            exit 1
+          fi
+
+      # CLAUDE.md §4 puts clippy at deny level, so a release that has not passed
+      # it has not met the bar the rulebook sets. Placed before the build
+      # because it compiles for the HOST arch only and shares the cargo cache
+      # with the step below — roughly half the work of the universal build, and
+      # a lint failure after a two-architecture compile is a tag that has to be
+      # re-cut for something a single command would have caught.
+      - name: Clippy at deny level
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Build, sign and publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          # ── Updater signing. Without these the build produces artifacts the
+          # app will refuse to install, which fails silently at update time
+          # rather than at build time — so they are required, not optional.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          # MUST be set even when the key has no password. An UNSET variable
+          # makes Tauri fall back to prompting for one; on a runner that reads
+          # from a closed stdin, and it reports the result as
+          # "incorrect updater private key password: Device not configured",
+          # which sends you hunting for a wrong password that does not exist.
+          # The `|| ''` keeps it defined when the secret is absent entirely.
+          # An empty value here is DELIBERATE — do not "tidy it up".
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
+
+          # ── Apple code signing and notarization.
+          # Empty until the secrets exist, and Tauri skips both when they are
+          # empty. Adding the secrets is the entire change — see the WHY above.
+          # Code signing:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # Notarization:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ inputs.tag || github.ref_name }}
+          releaseName: "Murmur __VERSION__"
+          releaseBody: "See the assets below to download and install."
+          # Published as a draft: the DMG should be opened and launched once
+          # before anyone is told it exists. Publishing the release is what
+          # points latest.json at it, so a broken build is never something
+          # every install downloads automatically.
+          releaseDraft: true
+          prerelease: false
+          # Writes latest.json from the signed artifacts. Without this the
+          # release carries a DMG nobody's updater can see.
+          includeUpdaterJson: true
+          args: --target universal-apple-darwin

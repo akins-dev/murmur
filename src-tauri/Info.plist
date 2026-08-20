@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SOURCE OF TRUTH KEYWORDS: NSMicrophoneUsageDescription, LSUIElement,
+    Info.plist, TCC, accessory
+  WHAT:  macOS bundle keys Tauri merges into the generated Info.plist.
+  WHY:   NSMicrophoneUsageDescription is NOT optional. Without it the app does
+         not get DENIED microphone access — the process is killed by the OS on
+         first access, which presents as a crash with no message.
+         LSUIElement keeps Murmur out of the Dock and the app switcher, which
+         is what makes it a background utility rather than a window you manage.
+  WHERE: Merged at bundle time; read by the OS, never by our code.
+-->
+<plist version="1.0">
+<dict>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Murmur needs your microphone to turn what you say into text. Audio is transcribed on this Mac and is never uploaded.</string>
+    <key>LSUIElement</key>
+    <true/>
+</dict>
+</plist>

@@ -1,0 +1,87 @@
+[package]
+name = "murmur"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "murmur_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+# SOURCE OF TRUTH KEYWORDS: doctest, sot_headers
+# The SOT headers are a navigation index, not API documentation, and they are
+# not Rust. Their WHY:/WHERE: continuation lines sit several spaces in once the
+# leading `*` is stripped, which rustdoc reads as an indented code block and
+# tries to compile — so `cargo test` failed on 79 "doctests" that were only ever
+# prose. `cargo test --lib` was green, which is how it went unnoticed: the
+# command everyone ran passed while the plain one did not.
+doctest = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+# Core ML is an ENHANCEMENT, never a requirement: whisper.cpp falls back to
+# Metal on its own when the .mlmodelc encoder is absent, and the first load of
+# a Core ML model on a machine costs a 15-60s Neural Engine compile. Off by
+# default so a plain `cargo build` is the fast, predictable path.
+[features]
+default = []
+coreml = ["whisper-rs/coreml"]
+
+[dependencies]
+tauri = { version = "2", features = ["image-png", "macos-private-api", "tray-icon"] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time", "fs"] }
+async-trait = "0.1.92"
+thiserror = "2.0.20"
+uuid = { version = "1.24.1", features = ["v4", "serde"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+tracing-appender = "0.2.5"
+parking_lot = "0.12.5"
+once_cell = "1.21.4"
+dirs = "6.0.0"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+specta = { version = "=2.0.0-rc.25", features = ["derive"] }
+specta-typescript = "0.0.12"
+tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
+cpal = "0.18.2"
+rubato = "5.0.0"
+ringbuf = "0.5.1"
+earshot = "1.2.2"
+arboard = "3.6.1"
+sha2 = "0.11.0"
+hex = "0.4.3"
+tauri-plugin-global-shortcut = "2.3.2"
+tauri-plugin-autostart = "2.5.1"
+tauri-plugin-process = "2.3.1"
+tauri-plugin-updater = "2.10.1"
+window-vibrancy = "0.8.0"
+whisper-rs = { version = "0.16.0", features = ["metal"] }
+reqwest = { version = "0.13.4", features = ["stream"] }
+audioadapter-buffers = "5.1.0"
+tauri-plugin-dialog = "2.7.2"
+# A second launch must not open a second Murmur. Two processes share one SQLite
+# file, and the second one's startup sweep marks the first one's LIVE session
+# orphaned before its own hotkey registration fails. See lib.rs.
+tauri-plugin-single-instance = "2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6.2"
+core-foundation = "0.10.1"
+core-graphics = "0.25.0"
+objc2 = "0.6.4"
+objc2-app-kit = "0.3.2"
+objc2-av-foundation = { version = "0.3.2", features = ["AVCaptureDevice", "AVMediaFormat"] }
+objc2-foundation = "0.3.2"
+
+[dev-dependencies]
+tokio = { version = "1.53.1", features = ["rt", "macros"] }
+

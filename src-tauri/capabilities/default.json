@@ -1,0 +1,24 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Murmur's three windows. Tauri v2 refuses any plugin call not listed here, so a missing entry fails at runtime rather than at build time.",
+  "windows": ["dashboard", "pill", "onboarding"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-close",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-position",
+    "core:window:allow-set-size",
+    "core:window:allow-start-dragging",
+    "core:event:default",
+    "core:app:default",
+    "opener:default",
+    "global-shortcut:default",
+    "autostart:default",
+    "process:default",
+    "dialog:default",
+    "updater:default"
+  ]
+}

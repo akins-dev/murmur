@@ -1,0 +1,406 @@
+/**
+ * SOURCE OF TRUTH KEYWORDS: global.css, tailwind-theme, material-pill,
+ *   material-panel, material-elevated, glass-noise, focus-ring, hairline,
+ *   hairline-r, mark-bars, color-sunken-strong, transparent-body,
+ *   prefers-reduced-motion, prefers-reduced-transparency
+ * WHAT:  The Tailwind v4 entry point. Imports the tokens, maps them into the
+ *        Tailwind theme so every token is reachable as a utility, defines the
+ *        three glass materials as utilities, and holds the base resets.
+ * WHY:   @theme inline is deliberate: the utility resolves to var(--surface-glass)
+ *        at the use site rather than to a snapshot of it, so the dark and
+ *        reduced-transparency overrides in tokens.css keep working without a
+ *        second theme block or a class on <html>. The transparent body rule is
+ *        load-bearing — Tauri transparency needs window transparent:true,
+ *        macOSPrivateApi:true AND a transparent document, and a missing third
+ *        produces an opaque window and a confusing hour (docs/03 §3.6).
+ *        Keep the tokens import UNLAYERED. Tailwind emits its theme into
+ *        @layer theme, so an unlayered :root always wins — which is what lets
+ *        a token and its theme key share a name (--radius-pill maps to
+ *        --radius-pill). Wrap tokens.css in a layer and every one of those
+ *        collapses to a self-reference and resolves to nothing.
+ * WHERE: Imported once per Vite entry (dashboard, pill, onboarding). Consumes
+ *        src/styles/tokens.css. Every component in src/components/global
+ *        styles itself only with the utilities defined here.
+ */
+
+@import "tailwindcss";
+@import "./tokens.css";
+
+@theme inline {
+  --color-glass: var(--surface-glass);
+  --color-elevated: var(--surface-elevated);
+  --color-sunken: var(--surface-sunken);
+  --color-sunken-strong: var(--surface-sunken-strong);
+  --color-opaque: var(--surface-opaque);
+  --color-opaque-elevated: var(--surface-opaque-elevated);
+
+  --color-hairline: var(--border-hairline);
+  --color-highlight: var(--border-highlight);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+
+  --radius-pill: var(--radius-pill);
+  --radius-panel: var(--radius-panel);
+  --radius-card: var(--radius-card);
+  --radius-input: var(--radius-input);
+
+  /* One 4px grid, published as the spacing base — see docs/04 §11. p-1 p-2 p-3
+   * p-4 p-6 p-8 p-12 are exactly --space-1 … --space-8. */
+  --spacing: var(--space-1);
+
+  --font-sans: var(--font-system);
+  --font-mono: var(--font-mono-stack);
+
+  --text-display: var(--text-display-size);
+  --text-display--line-height: var(--text-display-line);
+  --text-display--font-weight: var(--text-display-weight);
+  --text-display--letter-spacing: var(--text-display-tracking);
+
+  --text-title: var(--text-title-size);
+  --text-title--line-height: var(--text-title-line);
+  --text-title--font-weight: var(--text-title-weight);
+  --text-title--letter-spacing: var(--text-title-tracking);
+
+  --text-heading: var(--text-heading-size);
+  --text-heading--line-height: var(--text-heading-line);
+  --text-heading--font-weight: var(--text-heading-weight);
+  --text-heading--letter-spacing: var(--text-heading-tracking);
+
+  --text-body: var(--text-body-size);
+  --text-body--line-height: var(--text-body-line);
+  --text-body--font-weight: var(--text-body-weight);
+  --text-body--letter-spacing: var(--text-body-tracking);
+
+  --text-label: var(--text-label-size);
+  --text-label--line-height: var(--text-label-line);
+  --text-label--font-weight: var(--text-label-weight);
+  --text-label--letter-spacing: var(--text-label-tracking);
+
+  --text-caption: var(--text-caption-size);
+  --text-caption--line-height: var(--text-caption-line);
+  --text-caption--font-weight: var(--text-caption-weight);
+  --text-caption--letter-spacing: var(--text-caption-tracking);
+
+  --text-mono: var(--text-mono-size);
+  --text-mono--line-height: var(--text-mono-line);
+  --text-mono--font-weight: var(--text-mono-weight);
+  --text-mono--letter-spacing: var(--text-mono-tracking);
+
+  --shadow-pill: var(--shadow-pill);
+  --shadow-panel: var(--shadow-panel);
+  --shadow-card: var(--shadow-card);
+
+  --ease-standard: var(--motion-ease-standard);
+  --ease-linear: var(--motion-ease-linear);
+
+  /* A bare `transition-*` utility inherits the app's motion tokens, so a
+   * component never has to name a duration to get one that belongs here. */
+  --default-transition-duration: var(--motion-duration-fast);
+  --default-transition-timing-function: var(--motion-ease-standard);
+
+  --animate-breathe: breathe var(--pill-pulse-duration) var(--motion-ease-standard) infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: var(--pill-pulse-opacity-min);
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/**
+ * WHAT:  Base resets. Transparent document, native type rendering, and the
+ *        desktop-app selection and scroll behaviours.
+ * WHY:   A webview that behaves like a web page gives the app away instantly —
+ *        rubber-band overscroll, an I-beam over a label, a text caret dragged
+ *        across a stat. Selection is off by default and re-enabled explicitly
+ *        on inputs and on anything marked data-selectable (transcripts).
+ */
+@layer base {
+  * {
+    border-color: var(--border-hairline);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    width: 100%;
+    background: transparent;
+  }
+
+  /**
+   * THE WINDOW IS THE PILL — there is no slack, and nothing may rely on any.
+   * The NSPanel is sized to --pill-width/--pill-height exactly and its native
+   * vibrancy carries --radius-pill, so every pixel of this window is painted
+   * glass in the pill's shape. Anything the web layer leaves uncovered is not
+   * transparent, it is a bare grey rectangle, which is precisely the bug this
+   * arrangement was built to kill.
+   *
+   * So the pill fills the window (w-full h-full) instead of being centred in
+   * it, and it never transforms or animates its own size — a CSS morph would
+   * run against a native window resize that is not frame-locked to it. The
+   * centring below is not layout, it is a seatbelt: on the one frame where a
+   * native resize and this document's size disagree, it splits the difference
+   * across both edges instead of dumping it all on the right, and overflow is
+   * clipped to the window's rounded bounds either way.
+   */
+  body[data-window="pill"] #root {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  body {
+    margin: 0;
+    overscroll-behavior: none;
+    cursor: default;
+    font-family: var(--font-system);
+    font-size: var(--text-body-size);
+    line-height: var(--text-body-line);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  input,
+  textarea,
+  [data-selectable="true"] {
+    -webkit-user-select: text;
+    user-select: text;
+    cursor: auto;
+  }
+
+  ::selection {
+    background: var(--accent-soft);
+  }
+
+  :focus-visible {
+    outline: var(--focus-ring-width) solid var(--accent);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  /**
+   * NO SCROLLBARS ANYWHERE. The operator asked for them gone, and the scroll
+   * fades are the affordance that replaces them: an edge that dissolves is
+   * telling you there is more, which is the only thing the bar was saying.
+   *
+   * This hides the BAR, never the scrolling. Overflow, wheel, trackpad,
+   * keyboard paging and programmatic scrollTop all behave exactly as before —
+   * `display: none` on the scrollbar pseudo-element does not change the
+   * scroll container's behaviour, only whether the indicator is painted.
+   */
+  * {
+    scrollbar-width: none;
+  }
+
+  ::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/**
+ * WHAT:  The three materials of docs/04 §3, one utility each.
+ * WHY:   Each is the same three-part treatment — surface tint, 0.5px hairline,
+ *        inset top highlight, shadow — differing only in which tokens it reads,
+ *        so a component picks a material by name and never assembles one. The
+ *        backdrop-filter is the fallback for a surface with no native vibrancy
+ *        behind it; it collapses to 0px under reduced transparency, where the
+ *        surface token has already gone opaque.
+ */
+@utility material-pill {
+  background-color: var(--material-pill-surface);
+  border: var(--border-width-hairline) solid var(--border-hairline);
+  box-shadow:
+    inset 0 var(--border-width-hairline) 0 var(--border-highlight),
+    var(--material-pill-shadow);
+  backdrop-filter: blur(var(--glass-backdrop-blur));
+}
+
+@utility material-panel {
+  background-color: var(--material-panel-surface);
+  border: var(--border-width-hairline) solid var(--border-hairline);
+  box-shadow:
+    inset 0 var(--border-width-hairline) 0 var(--border-highlight),
+    var(--material-panel-shadow);
+  backdrop-filter: blur(var(--glass-backdrop-blur));
+}
+
+@utility material-elevated {
+  background-color: var(--material-elevated-surface);
+  border: var(--border-width-hairline) solid var(--border-hairline);
+  box-shadow:
+    inset 0 var(--border-width-hairline) 0 var(--border-highlight),
+    var(--material-elevated-shadow);
+  backdrop-filter: blur(var(--glass-backdrop-blur));
+}
+
+/**
+ * WHAT:  The 3% noise layer that sits above the material and below content.
+ * WHY:   Large flat glass reads as plastic. This is subtle enough that it is
+ *        only noticeable by its absence, which is the point.
+ */
+@utility glass-noise {
+  background-image: var(--noise-image);
+  opacity: var(--noise-opacity);
+  pointer-events: none;
+}
+
+/**
+ * WHAT:  The identity mark (docs/04 §12) — the waveform at rest, five bars.
+ * WHY:   Heights are ratios of --mark-size, so the mark is ONE shape at every
+ *        size instead of five numbers re-picked per use. Bar width and gap stay
+ *        fixed on purpose: scaling the stroke with the height turns the mark
+ *        into a blob when it is large and a smear when it is small. Authored
+ *        here rather than as inline styles because a component that writes
+ *        `height: 25%` five times has put a design value back into JSX.
+ */
+@utility mark-bars {
+  display: flex;
+  align-items: center;
+  gap: var(--mark-bar-gap);
+  height: var(--mark-size);
+
+  & > span {
+    width: var(--mark-bar-width);
+    border-radius: var(--mark-bar-width);
+    background: currentColor;
+  }
+
+  & > span:nth-child(1),
+  & > span:nth-child(5) {
+    height: calc(var(--mark-size) * var(--mark-ratio-outer));
+  }
+
+  & > span:nth-child(2),
+  & > span:nth-child(4) {
+    height: calc(var(--mark-size) * var(--mark-ratio-mid));
+  }
+
+  & > span:nth-child(3) {
+    height: calc(var(--mark-size) * var(--mark-ratio-peak));
+  }
+}
+
+/** A single hairline rule, so no component improvises a 1px divider. */
+@utility hairline {
+  border: var(--border-width-hairline) solid var(--border-hairline);
+}
+
+@utility hairline-t {
+  border-top: var(--border-width-hairline) solid var(--border-hairline);
+}
+
+@utility hairline-b {
+  border-bottom: var(--border-width-hairline) solid var(--border-hairline);
+}
+
+@utility hairline-r {
+  border-right: var(--border-width-hairline) solid var(--border-hairline);
+}
+
+/**
+ * WHAT:  Reduced-motion handling (docs/04 §6).
+ * WHY:   Every animation collapses to the app's smallest transition rather than
+ *        being disabled — things appearing instantly read as a glitch, not as a
+ *        preference being respected. JS springs are handled separately in
+ *        src/lib/motion.ts, which returns a fade config under the same query.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: var(--motion-duration-fast) !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: var(--motion-duration-fast) !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+
+/**
+ * WHAT:  The smart scroll fade (docs/04 §8) — the top and bottom edges of a
+ *        scroll container dissolving when, and only when, content is hidden
+ *        behind them.
+ * WHY:   A MASK rather than a painted gradient. The dashboard window is
+ *        transparent with native vibrancy behind it, so a gradient drawn in a
+ *        background colour would be an opaque slab lying on the glass, visible
+ *        as a band even where it was meant to be invisible. Masking makes the
+ *        CONTENT fade to nothing instead, which is both what was asked for and
+ *        the only version that is correct over a translucent surface.
+ *
+ *        The two edges are independent lengths so each can be off while the
+ *        other is on — that is what "smart" means here. A fade with nothing
+ *        behind it is not neutral: it reads as a rendering artefact, a smudge
+ *        at the bottom of a short page.
+ *
+ *        The lengths are registered with @property so they are animatable —
+ *        a bare custom property is a string to the animation engine and would
+ *        snap between states. The top fade is deliberately as tall as the
+ *        header band PLUS the fade, so content dissolves completely before it
+ *        reaches the title rather than sliding behind it and showing through.
+ */
+@property --fade-top {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --fade-bottom {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@utility scroll-fade {
+  --fade-top: 0px;
+  --fade-bottom: 0px;
+  /* How tall each fade is WHEN ON. Overridable because a scroller that sits
+   * under the page header has to dissolve its content across the whole header
+   * band, while a list nested below a toolbar fades at its own top edge and
+   * would look wrong reaching up into somebody else's chrome. */
+  --fade-size-top: var(--scroll-fade-size);
+  --fade-size-bottom: var(--scroll-fade-size);
+  transition:
+    --fade-top var(--motion-duration-medium) var(--motion-ease-standard),
+    --fade-bottom var(--motion-duration-medium) var(--motion-ease-standard);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--fade-top),
+    #000 calc(100% - var(--fade-bottom)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--fade-top),
+    #000 calc(100% - var(--fade-bottom)),
+    transparent 100%
+  );
+
+  &[data-fade-top="true"] {
+    --fade-top: var(--fade-size-top);
+  }
+
+  &[data-fade-bottom="true"] {
+    --fade-bottom: var(--fade-size-bottom);
+  }
+}

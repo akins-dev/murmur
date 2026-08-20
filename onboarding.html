@@ -1,0 +1,19 @@
+<!--
+  SOURCE OF TRUTH KEYWORDS: onboarding-window, onboarding.html, onboarding-entry, first-run
+  WHAT:  The first-run document. Loads src/entries/onboarding.tsx.
+  WHY:   Separate so first run does not download the dashboard bundle before
+         the user has said a word.
+  WHERE: Opened once on first launch by src-tauri.
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Welcome to Murmur</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/entries/onboarding.tsx"></script>
+  </body>
+</html>

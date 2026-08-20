@@ -1,0 +1,20 @@
+<!--
+  SOURCE OF TRUTH KEYWORDS: pill-window, pill.html, pill-entry, transparent-window
+  WHAT:  The pill overlay document. Loads src/entries/pill.tsx.
+  WHY:   Its own document so the overlay ships no charts, no tables and no
+         router. The body is transparent through styles/global.css, which is
+         one of the three things Tauri transparency needs (docs/03 §3.6).
+  WHERE: Opened as the NSPanel overlay by src-tauri.
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Murmur</title>
+  </head>
+  <body data-window="pill">
+    <div id="root"></div>
+    <script type="module" src="/src/entries/pill.tsx"></script>
+  </body>
+</html>

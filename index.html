@@ -1,0 +1,21 @@
+<!--
+  SOURCE OF TRUTH KEYWORDS: dashboard-window, index.html, dashboard-entry, root-element
+  WHAT:  The dashboard window document. Loads src/entries/dashboard.tsx.
+  WHY:   One HTML file per window, declared in vite.config.ts rollupOptions.input.
+         Separate documents are what give each window its own bundle, so the
+         pill never parses the dashboard's charts.
+  WHERE: Opened as the main window by src-tauri. Siblings: pill.html,
+         onboarding.html.
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Murmur</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/entries/dashboard.tsx"></script>
+  </body>
+</html>

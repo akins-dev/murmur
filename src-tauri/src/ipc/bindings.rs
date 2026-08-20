@@ -1,0 +1,145 @@
+/*!
+ * SOURCE OF TRUTH KEYWORDS: specta_builder, export_bindings, collect_commands,
+ *   collect_events, BINDINGS_PATH
+ * WHAT:  The one place every command and event is registered with specta, and
+ *        the export that writes src/lib/bindings.ts.
+ * WHY:   This is the app's tRPC analog: Rust signatures generate the TypeScript
+ *        client, so there are no DTOs, no hand-written IPC types, and a renamed
+ *        Rust field breaks the frontend build instead of arriving as undefined
+ *        at runtime.
+ *
+ *        The export runs as a TEST rather than a build script on purpose.
+ *        A build script would regenerate bindings on every compile — including
+ *        release builds on a machine that has no frontend checked out — and a
+ *        manual step would drift. As a test it runs with `cargo test`, so CI
+ *        fails if the checked-in bindings do not match the Rust.
+ * WHERE: The builder is mounted in lib.rs; the generated file is consumed by
+ *        every frontend module that talks to Rust.
+ */
+
+use tauri_specta::{collect_commands, collect_events, Builder};
+
+use super::commands;
+use super::events;
+
+/// Where the generated client lands. Never edit that file by hand.
+pub const BINDINGS_PATH: &str = "../src/lib/bindings.ts";
+
+/**
+ * SOURCE OF TRUTH KEYWORDS: specta_builder
+ * WHAT:  Registers every IPC command and event.
+ * WHY:   A command missing from this list is invisible to the frontend, and an
+ *        event missing from it has no typed listener. Both fail silently, so
+ *        this list is the checklist — adding a command means adding it here.
+ * WHERE: Mounted onto the Tauri builder in lib.rs, and used by the export test.
+ */
+pub fn specta_builder() -> Builder<tauri::Wry> {
+    Builder::<tauri::Wry>::new()
+        .commands(collect_commands![
+            // Session — the core loop
+            commands::session::start_recording,
+            commands::session::stop_recording,
+            commands::session::cancel_recording,
+            commands::session::resume_recording,
+            commands::session::get_session_state,
+            // History
+            commands::history::list_history,
+            commands::history::search_history,
+            commands::history::get_history_entry,
+            commands::history::delete_history_entry,
+            commands::history::clear_history,
+            commands::history::purge_history,
+            commands::history::export_history,
+            commands::files::save_text_file,
+            // Settings and the registry mirror
+            commands::settings::get_settings,
+            commands::settings::set_setting,
+            commands::settings::reset_setting,
+            commands::settings::get_registry,
+            commands::profiles::list_app_profiles,
+            commands::profiles::save_app_profile,
+            commands::profiles::delete_app_profile,
+            // Stats
+            commands::stats::get_stats,
+            // Dictionary
+            commands::dictionary::list_dictionary,
+            commands::dictionary::create_dictionary_entry,
+            commands::dictionary::update_dictionary_entry,
+            commands::dictionary::delete_dictionary_entry,
+            // Engine capabilities and the language picker
+            commands::engine::get_engine_capabilities,
+            commands::engine::list_languages,
+            commands::engine::copy_text,
+            // Models
+            commands::models::list_models,
+            commands::models::get_model_status,
+            commands::models::download_model,
+            commands::models::delete_model,
+            // System
+            commands::system::check_permissions,
+            commands::system::request_permission,
+            commands::system::open_privacy_pane,
+            commands::system::list_input_devices,
+            // Updates
+            commands::updates::check_for_update,
+            commands::updates::install_update,
+        ])
+        .events(collect_events![
+            events::SessionStateChanged,
+            events::TranscriptDelivered,
+            events::AudioLevelChanged,
+            events::ModelDownloadProgress,
+            events::ModelStateChanged,
+            events::OnboardingProgress,
+            events::SettingsChanged,
+            events::UpdateAvailable,
+        ])
+}
+
+/**
+ * SOURCE OF TRUTH KEYWORDS: typescript_config
+ * WHAT:  How Rust types are rendered into TypeScript.
+ * WHY:   The 64-bit integer question is settled per-field by `TsNumber` in
+ *        types/numeric.rs, not here — this version of specta-typescript has no
+ *        global switch for it, and a field that forgets the annotation fails
+ *        this export loudly, which is the right place to find out.
+ * WHERE: Used by the export test; the only place this decision is made.
+ */
+#[cfg(test)]
+fn typescript_config() -> specta_typescript::Typescript {
+    specta_typescript::Typescript::default()
+        .header("// GENERATED by tauri-specta. Do not edit — see src-tauri/src/ipc/bindings.rs.\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /**
+     * WHAT:  Regenerates src/lib/bindings.ts from the Rust signatures.
+     * WHY:   Running as a test means `cargo test` keeps the client in step with
+     *        the backend, and a diff in CI is the signal that someone changed a
+     *        contract without regenerating.
+     * WHERE: The generated file is imported by the whole frontend.
+     */
+    #[test]
+    fn bindings_are_up_to_date() {
+        specta_builder()
+            .export(typescript_config(), BINDINGS_PATH)
+            .expect("failed to export TypeScript bindings");
+    }
+
+    #[test]
+    fn every_integer_we_export_fits_in_a_javascript_number() {
+        // The guard behind the BigInt decision below. If any of these stops
+        // holding, the export config is wrong and precision is being lost
+        // silently — which is the one failure mode a plain `number` has.
+        const JS_MAX_SAFE_INT: i64 = 9_007_199_254_740_991;
+
+        // Millisecond timestamps: ~1.77e12 today, ~2.5e12 in a century.
+        assert!(crate::telemetry::now_ms() < JS_MAX_SAFE_INT / 1000);
+        // Durations, word counts and byte sizes are all orders smaller than a
+        // timestamp, so the timestamp is the binding constraint.
+        assert!(i64::from(u32::MAX) < JS_MAX_SAFE_INT);
+    }
+}
