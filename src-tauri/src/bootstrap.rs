@@ -657,7 +657,7 @@ fn bind_dictation(app: &AppHandle, binding: &HotkeyBinding) -> AppResult<()> {
         return match tap {
             Some(tap) => {
                 *MODIFIER_TAP.lock() = Some(tap);
-                tracing::info!(?modifier, "dictation bound to a modifier double-tap");
+                tracing::info!(?modifier, taps = crate::adapters::macos::TAPS_REQUIRED, "dictation bound to a modifier tap");
                 Ok(())
             }
             None => Err(AppError::new(
@@ -690,7 +690,14 @@ fn bind_dictation(app: &AppHandle, binding: &HotkeyBinding) -> AppResult<()> {
 fn register_hotkeys(app: &AppHandle, db: &Database) -> AppResult<()> {
     let binding = dictation_binding(db);
     bind_dictation(app, &binding)?;
-    tracing::info!(accelerator = binding.to_accelerator(), "hotkey registered");
+    // Only for real shortcuts. A modifier-only binding is not an accelerator
+    // and renders as nonsense here ("Alt+AltLeft"), which reads in a log like a
+    // chord that could never be pressed — `bind_dictation` logs the tap it
+    // actually installed instead. A diagnostic that describes the wrong
+    // mechanism costs more than no diagnostic.
+    if !binding.is_modifier_only() {
+        tracing::info!(accelerator = binding.to_accelerator(), "hotkey registered");
+    }
     Ok(())
 }
 

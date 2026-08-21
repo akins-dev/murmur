@@ -370,6 +370,38 @@ mod tests {
     }
 
     /**
+     * SOURCE OF TRUTH KEYWORDS: skip_under_secure_input
+     * WHAT:  Skips a delivery test when the machine has Secure Input on.
+     * WHY:   Secure Input is GLOBAL and belongs to whatever app currently has a
+     *        password field focused — a login prompt, a keychain dialog, a sudo
+     *        prompt in a terminal. `deliver` checks it first and by design, so
+     *        while it is on, every delivery is clipboard-only and the tests
+     *        below assert things that cannot be true.
+     *
+     *        They are skipped rather than reworked because the behaviour they
+     *        guard is real and worth guarding; it simply cannot be observed in
+     *        this state. Failing instead would teach whoever hits it that these
+     *        tests are unreliable, and the next real regression would be waved
+     *        through as "that flaky pasteboard thing". Same pattern as the
+     *        fixtures that skip when `say` is unavailable.
+     *
+     *        Found the honest way: a keychain dialog left on screen by a hung
+     *        `codesign` turned Secure Input on, and two green tests went red
+     *        with nothing in the codebase having changed.
+     * WHERE: The two delivery tests that assert on permissions or on reason.
+     */
+    fn secure_input_would_mask_this_test() -> bool {
+        if secure_input_active() {
+            eprintln!(
+                "skipped: Secure Input is active on this machine, so every delivery is \
+                 clipboard-only. Dismiss any password or keychain prompt and re-run."
+            );
+            return true;
+        }
+        false
+    }
+
+    /**
      * SOURCE OF TRUTH KEYWORDS: auto_paste_regression, never_asked_means_ask
      * WHAT:  Delivering with Accessibility never requested must ASK for it.
      * WHY:   This is the auto-paste bug, written down so it cannot come back.
@@ -387,6 +419,9 @@ mod tests {
     #[test]
     fn delivering_without_a_decision_asks_for_accessibility() -> AppResult<()> {
         let _guard = PASTEBOARD_LOCK.lock();
+        if secure_input_would_mask_this_test() {
+            return Ok(());
+        }
         let permissions = FakePermissions::new(PermissionState::NotDetermined);
         let injector = MacosInjector::new(permissions);
 
@@ -429,6 +464,9 @@ mod tests {
     #[test]
     fn turning_auto_paste_off_stops_the_paste_and_asks_for_nothing() -> AppResult<()> {
         let _guard = PASTEBOARD_LOCK.lock();
+        if secure_input_would_mask_this_test() {
+            return Ok(());
+        }
         let permissions = FakePermissions::new(PermissionState::NotDetermined);
         let injector = MacosInjector::new(permissions);
 

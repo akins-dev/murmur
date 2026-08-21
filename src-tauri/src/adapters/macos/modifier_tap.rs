@@ -80,7 +80,7 @@ const DOUBLE_TAP_WINDOW: Duration = Duration::from_millis(500);
  *        rather than hardcoded to a pair, precisely so that reversal stays
  *        cheap.
  */
-const TAPS_REQUIRED: usize = 1;
+pub const TAPS_REQUIRED: usize = 1;
 
 /// What the tap thread observed, normalised so the detector never touches
 /// CoreGraphics types and can therefore be tested.
