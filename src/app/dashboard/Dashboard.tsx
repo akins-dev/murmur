@@ -24,6 +24,7 @@ import { PageShell } from "./_components/PageShell";
 import { UpdateNotice } from "./_components/UpdateNotice";
 import { BillingView } from "./billing";
 import { navigateTo, useHashRoute } from "./use-hash-route";
+import { dictationModeFrom, type DictationMode } from "@/lib/dictation-mode";
 import { useTauriEvent } from "@/lib/use-event";
 import { navSelectedChannel } from "@/lib/window-events";
 import { StatsView } from "./stats/StatsView";
@@ -123,6 +124,7 @@ export function Dashboard() {
               registry={registry.data}
               metrics={metrics}
               hotkey={dictationHotkey(registry.data, settings.data)}
+              mode={dictationModeFrom(settings.data)}
             />
           ) : (
             <ScrollArea contentClassName="px-[var(--page-padding-x)] pb-8">
@@ -144,18 +146,20 @@ function View({
   registry,
   metrics,
   hotkey,
+  mode,
 }: {
   route: string;
   section: string | null;
   registry: RegistrySnapshot;
   metrics: RegistrySnapshot["capabilities"][number]["metrics"];
   hotkey: HotkeyBinding | null;
+  mode: DictationMode;
 }) {
   switch (route) {
     case "stats":
-      return <StatsView metrics={metrics} hotkey={hotkey} />;
+      return <StatsView metrics={metrics} hotkey={hotkey} mode={mode} />;
     case "history":
-      return <HistoryView hotkey={hotkey} />;
+      return <HistoryView hotkey={hotkey} mode={mode} />;
     case "settings":
       return <SettingsView registry={registry} section={section} />;
     case "billing":

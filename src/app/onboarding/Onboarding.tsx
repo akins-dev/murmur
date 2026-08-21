@@ -42,6 +42,7 @@ import { useTauriEvent } from "@/lib/use-event";
 import { ErrorSurface } from "@/components/global";
 import { StepShell } from "./_components/StepShell";
 import { usePermissions } from "@/lib/use-permissions";
+import { dictationModeFrom } from "@/lib/dictation-mode";
 import { PermissionStep } from "./_components/PermissionStep";
 import { ModelStep } from "./_components/ModelStep";
 import { HotkeyStep } from "./_components/HotkeyStep";
@@ -65,6 +66,10 @@ export function Onboarding() {
   const permissions = usePermissions();
   const models = useCommand(commands.listModels, []);
   const registry = useCommand(commands.getRegistry, []);
+  // Read rather than assumed: every screen here that teaches the gesture has to
+  // match dictation.mode, or it teaches the wrong one. No live subscription —
+  // nothing changes settings during first run.
+  const settings = useCommand(commands.getSettings, []);
   // The tour teaches; it has no backend state to derive from, so it is the
   // one genuinely local step in this flow. See TourStep.
   const [toured, setToured] = useState(false);
@@ -87,6 +92,8 @@ export function Onboarding() {
     return { ...picked, state: liveStates[picked.descriptor.id] ?? picked.state };
   }, [liveStates, models.data]);
   const modelReady = model?.state.kind === "READY";
+
+  const mode = dictationModeFrom(settings.data);
 
   const hotkey = dictationHotkey(
     (registry.data?.capabilities ?? []).map((capability) => capability.hotkey?.default ?? null),
@@ -129,7 +136,7 @@ export function Onboarding() {
       ) : invited ? (
         <InviteStep onFinish={finish} finishError={finishError} />
       ) : !toured ? (
-        <TourStep hotkey={hotkey} onDone={() => setToured(true)} />
+        <TourStep hotkey={hotkey} mode={mode} onDone={() => setToured(true)} />
       ) : !micGranted ? (
         <StepShell
           title="Two permissions"
@@ -147,7 +154,11 @@ export function Onboarding() {
       ) : (
         <StepShell
           title="Try it"
-          description="Press the hotkey anywhere, say something, and press it again."
+          description={
+            mode === "push_to_talk"
+              ? "Hold the hotkey anywhere, say something, and let go."
+              : "Press the hotkey anywhere, say something, and press it again."
+          }
           action={
             tested ? (
               <button
@@ -165,7 +176,7 @@ export function Onboarding() {
             ) : null
           }
         >
-          <HotkeyStep hotkey={hotkey} onDelivered={() => setTested(true)} />
+          <HotkeyStep hotkey={hotkey} mode={mode} onDelivered={() => setTested(true)} />
         </StepShell>
       )}
     </div>

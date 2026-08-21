@@ -31,9 +31,18 @@ import { events, type HotkeyBinding, type SessionState } from "@/lib/bindings";
 import { useTauriEvent } from "@/lib/use-event";
 import { isTransientFailure } from "@/lib/errors";
 import { glyphsForBinding } from "@/lib/hotkey";
+import type { DictationMode } from "@/lib/dictation-mode";
 import { Keycap } from "@/components/global";
 
-export function HotkeyStep({ hotkey, onDelivered }: { hotkey: HotkeyBinding | null; onDelivered: () => void }) {
+export function HotkeyStep({
+  hotkey,
+  mode,
+  onDelivered,
+}: {
+  hotkey: HotkeyBinding | null;
+  mode: DictationMode;
+  onDelivered: () => void;
+}) {
   const [seen, setSeen] = useState<SessionState | null>(null);
 
   const [delivered, setDelivered] = useState<number | null>(null);
@@ -66,7 +75,9 @@ export function HotkeyStep({ hotkey, onDelivered }: { hotkey: HotkeyBinding | nu
         ? "Writing it out…"
         : seen?.kind === "FAILED"
           ? seen.message
-          : "Press and hold a thought.";
+          : mode === "push_to_talk"
+            ? "Press and hold a thought."
+            : "Press it, and say what you are thinking.";
 
   const alarming = seen?.kind === "FAILED" && !isTransientFailure(seen.code);
 

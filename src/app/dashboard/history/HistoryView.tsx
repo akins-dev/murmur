@@ -25,6 +25,7 @@ import { unwrapCommand } from "@/lib/ipc";
 import { readDurationMs } from "@/lib/motion";
 import { DataList, EmptyState, ErrorSurface, Skeleton } from "@/components/global";
 import type { HotkeyBinding } from "@/lib/bindings";
+import type { DictationMode } from "@/lib/dictation-mode";
 import { NoTranscriptionsYet } from "../_components/NoTranscriptionsYet";
 import { ExportAction } from "./_components/ExportAction";
 import { HistoryRow } from "./_components/HistoryRow";
@@ -33,13 +34,14 @@ import { useHistory } from "./use-history";
 export interface HistoryViewProps {
   /** The dictation hotkey, for the empty state. Null while it is unknown. */
   hotkey: HotkeyBinding | null;
+  mode: DictationMode;
 }
 
 function textOf(session: SessionSummary): string {
   return session.final_text ?? session.raw_text ?? "";
 }
 
-export function HistoryView({ hotkey }: HistoryViewProps) {
+export function HistoryView({ hotkey, mode }: HistoryViewProps) {
   const [input, setInput] = useState("");
   const [query, setQuery] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -126,7 +128,7 @@ export function HistoryView({ hotkey }: HistoryViewProps) {
           !feed.loaded ? (
             <Skeleton rows={6} className="h-[var(--row-height)] rounded-none" />
           ) : (
-            <NoTranscriptionsYet hotkey={hotkey} />
+            <NoTranscriptionsYet hotkey={hotkey} mode={mode} />
           )
         }
         noResults={<EmptyState headline="Nothing matches that" description="Try a shorter search." />}

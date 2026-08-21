@@ -23,6 +23,7 @@ import { commands, type HotkeyBinding, type MetricDef } from "@/lib/bindings";
 import { useCommand } from "@/lib/ipc";
 import { formatCompactDuration, formatCount } from "@/lib/format";
 import { GlassPanel, ScrollArea, StatCard } from "@/components/global";
+import type { DictationMode } from "@/lib/dictation-mode";
 import { NoTranscriptionsYet } from "../_components/NoTranscriptionsYet";
 import { ViewState } from "../_components/ViewState";
 import { ActivityChart } from "./_components/ActivityChart";
@@ -34,9 +35,10 @@ export interface StatsViewProps {
   metrics: readonly MetricDef[];
   /** For the zero state, which is the same one History shows. */
   hotkey: HotkeyBinding | null;
+  mode: DictationMode;
 }
 
-export function StatsView({ metrics, hotkey }: StatsViewProps) {
+export function StatsView({ metrics, hotkey, mode }: StatsViewProps) {
   const stats = useCommand(commands.getStats, []);
 
   return (
@@ -44,7 +46,7 @@ export function StatsView({ metrics, hotkey }: StatsViewProps) {
         <ViewState state={stats} onRetry={stats.reload}>
           {(data) =>
             data.total_sessions === 0 ? (
-              <NoTranscriptionsYet hotkey={hotkey} />
+              <NoTranscriptionsYet hotkey={hotkey} mode={mode} />
             ) : (
               <>
                 <GlassPanel material="elevated" radius="card" className="flex flex-col gap-4 p-5">

@@ -15,18 +15,28 @@
  */
 
 import type { HotkeyBinding } from "@/lib/bindings";
+import type { DictationMode } from "@/lib/dictation-mode";
 import { glyphsForBinding, displayForBinding } from "@/lib/hotkey";
 import { EmptyState, Keycap } from "@/components/global";
 
-export function NoTranscriptionsYet({ hotkey }: { hotkey: HotkeyBinding | null }) {
+export function NoTranscriptionsYet({
+  hotkey,
+  mode,
+}: {
+  hotkey: HotkeyBinding | null;
+  /** The empty state tells someone how to start, so it has to describe the
+   *  gesture they actually have — "press" and "hold" are not interchangeable. */
+  mode: DictationMode;
+}) {
+  const verb = mode === "push_to_talk" ? "Hold" : "Press";
   return (
     <EmptyState
       icon={hotkey ? <Keycap keys={glyphsForBinding(hotkey)} /> : null}
       headline="No transcriptions yet"
       description={
         hotkey
-          ? `Press ${displayForBinding(hotkey)} anywhere to start.`
-          : "Press your dictation hotkey anywhere to start."
+          ? `${verb} ${displayForBinding(hotkey)} anywhere to start.`
+          : `${verb} your dictation hotkey anywhere to start.`
       }
     />
   );

@@ -31,40 +31,52 @@
 import { useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import type { HotkeyBinding } from "@/lib/bindings";
+import type { DictationMode } from "@/lib/dictation-mode";
 import { glyphsForBinding } from "@/lib/hotkey";
 import { cn } from "@/lib/utils";
 import { Keycap, Mark } from "@/components/global";
 
 interface TourSlide {
-  title: string;
+  /** Derived from the gesture, because slide one teaches it and the two
+   *  gestures are opposites — one sentence cannot be true of both. */
+  title: (mode: DictationMode) => string;
   /** One line. Anything longer stops being read on a first-run screen. */
-  body: (hotkey: HotkeyBinding | null) => React.ReactNode;
+  body: (hotkey: HotkeyBinding | null, mode: DictationMode) => React.ReactNode;
   media: string;
 }
 
 const TOUR_SLIDES: readonly TourSlide[] = [
   {
-    title: "Hold to talk",
-    body: (hotkey) => (
-      <>
-        Hold{" "}
-        {hotkey ? (
-          <Keycap keys={glyphsForBinding(hotkey)} size="sm" className="mx-0.5 inline-flex align-middle" />
-        ) : (
-          "your shortcut"
-        )}{" "}
-        anywhere and say it. Let go when you are done.
-      </>
-    ),
+    // TOGGLE IS THE DEFAULT, and the surprising half of it is that the SAME key
+    // stops the recording — a person who has met push-to-talk anywhere else
+    // will hold it, let go, and keep recording. So the toggle title says so
+    // outright and the sentence spends its second half on stopping.
+    //
+    // The verbs match the registry's own option copy — "Press to start, press
+    // again to stop" and "Hold to record, release to send" — so the words a
+    // user meets here are the words they meet again in Settings.
+    title: (mode) => (mode === "push_to_talk" ? "Hold to talk" : "Press to start and stop"),
+    body: (hotkey, mode) => {
+      const key = hotkey ? (
+        <Keycap keys={glyphsForBinding(hotkey)} size="sm" className="mx-0.5 inline-flex align-middle" />
+      ) : (
+        "your shortcut"
+      );
+      return mode === "push_to_talk" ? (
+        <>Hold {key} anywhere and say it. Let go when you are done.</>
+      ) : (
+        <>Press {key} anywhere and start talking. Press it again when you are done.</>
+      );
+    },
     media: "/onboarding/step-1.gif",
   },
   {
-    title: "It lands where you type",
+    title: () => "It lands where you type",
     body: () => <>Your words paste straight into whatever app you were already in.</>,
     media: "/onboarding/step-2.gif",
   },
   {
-    title: "Nothing leaves your Mac",
+    title: () => "Nothing leaves your Mac",
     body: () => <>Every word is transcribed on your own machine. No account, no upload.</>,
     media: "/onboarding/step-3.gif",
   },
@@ -74,25 +86,28 @@ export const TOUR_LENGTH = TOUR_SLIDES.length;
 
 export function TourStep({
   hotkey,
+  mode,
   onDone,
 }: {
   hotkey: HotkeyBinding | null;
+  mode: DictationMode;
   onDone: () => void;
 }) {
   const [index, setIndex] = useState(0);
   const slide = TOUR_SLIDES[index]!;
+  const title = slide.title(mode);
   const isLast = index === TOUR_SLIDES.length - 1;
 
   return (
     <section className="flex h-full flex-col items-center justify-center gap-6 px-8">
       <Mark size="lg" label="Murmur" />
 
-      <TourMedia key={slide.media} src={slide.media} title={slide.title} />
+      <TourMedia key={slide.media} src={slide.media} title={title} />
 
       <header className="flex flex-col items-center gap-2 text-center">
-        <h1 className="text-title text-text-primary">{slide.title}</h1>
+        <h1 className="text-title text-text-primary">{title}</h1>
         <p className="max-w-96 text-body text-text-secondary">
-          {slide.body(hotkey)}
+          {slide.body(hotkey, mode)}
         </p>
       </header>
 
@@ -127,9 +142,9 @@ export function TourStep({
       <div className="flex items-center gap-2">
         {TOUR_SLIDES.map((item, dotIndex) => (
           <button
-            key={item.title}
+            key={item.media}
             type="button"
-            aria-label={`Go to ${item.title}`}
+            aria-label={`Go to ${item.title(mode)}`}
             aria-current={dotIndex === index}
             onClick={() => setIndex(dotIndex)}
             className={cn(
