@@ -156,12 +156,18 @@ jobs:
       # Accessibility grant to the certificate that signed the app, so a new
       # certificate silently voids every existing user's permission.
       - name: Trust the signing certificate on this runner
-        if: ${{ secrets.APPLE_CERTIFICATE != '' }}
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
           set -euo pipefail
+          # Guarded HERE and not in `if:` — `secrets` is not a permitted context
+          # in a step-level condition and using it there fails the whole
+          # workflow at parse time, before any job runs.
+          if [ -z "${APPLE_CERTIFICATE:-}" ]; then
+            echo "::warning::No signing certificate configured — this build will be UNSIGNED."
+            exit 0
+          fi
           KC=build.keychain
           KCPASS=$(uuidgen)
           security create-keychain -p "$KCPASS" "$KC"
