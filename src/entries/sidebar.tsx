@@ -26,11 +26,9 @@ import { emit } from "@tauri-apps/api/event";
 import { SidebarWindow } from "@/app/sidebar";
 import { commands } from "@/lib/bindings";
 import { useCommand } from "@/lib/ipc";
+import { NAV_SELECTED } from "@/lib/window-events";
 import "@/styles/global.css";
 import { createRoot } from "react-dom/client";
-
-/** Matches the dashboard's event name; the payload is the route to open. */
-const NAV_SELECTED = "nav-selected";
 
 function SidebarEntry() {
   const registry = useCommand(commands.getRegistry, []);

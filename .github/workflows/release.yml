@@ -184,3 +184,29 @@ jobs:
           # everyone except whoever cut the last release. Contributors should be
           # able to build the app; only a release needs to be signable.
           args: --target universal-apple-darwin --config '{"bundle":{"createUpdaterArtifacts":true}}'
+
+
+      # A bundle whose signature does not VERIFY is not a signable failure —
+      # it builds, it launches, and macOS quietly refuses to trust it. That is
+      # not hypothetical: every build for a day signed only the inner
+      # executable and left no _CodeSignature/CodeResources, so the app was
+      # "valid" to every check we ran and invalid to the one that matters. TCC
+      # would not honour an Accessibility grant for it, so the operator had the
+      # switch ON, the app prompted anyway, and pasting never worked.
+      #
+      # Verifying the ARTIFACT is the only check that could have caught it.
+      # Hash-comparing the binary did not, because the binary was fine and the
+      # bundle around it was not.
+      - name: Verify the signed bundle
+        run: |
+          APP=$(find src-tauri/target -type d -name "Murmur.app" -path "*/bundle/macos/*" | head -1)
+          if [ -z "$APP" ]; then
+            echo "::error::no Murmur.app was produced"; exit 1
+          fi
+          echo "checking $APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -dv "$APP" 2>&1 | grep -qE "^Identifier=com\.webprodigies\.murmur" \
+            || { echo "::error::wrong bundle identifier — TCC grants will not persist"; exit 1; }
+          codesign -d --entitlements :- "$APP" 2>/dev/null | grep -q "audio-input" \
+            || { echo "::error::microphone entitlement missing"; exit 1; }
+          echo "bundle verifies, identifier and entitlement correct"

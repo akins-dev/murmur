@@ -20,11 +20,12 @@ import { commands, type HotkeyBinding, type NavDef, type RegistrySnapshot, type 
 import { useCommand } from "@/lib/ipc";
 import { useSettings } from "./use-settings";
 import { EmptyState, ErrorBoundary, ErrorSurface, Skeleton, ScrollArea } from "@/components/global";
-import { Sidebar } from "./_components/Sidebar";
 import { PageShell } from "./_components/PageShell";
 import { UpdateNotice } from "./_components/UpdateNotice";
 import { BillingView } from "./billing";
 import { navigateTo, useHashRoute } from "./use-hash-route";
+import { useTauriEvent } from "@/lib/use-event";
+import { navSelectedChannel } from "@/lib/window-events";
 import { StatsView } from "./stats/StatsView";
 import { HistoryView } from "./history/HistoryView";
 import { SettingsView } from "./settings/SettingsView";
@@ -55,6 +56,12 @@ export function Dashboard() {
   // empty state without a reload.
   const settings = useSettings();
   const { route, section } = useHashRoute();
+
+  // The rail is a separate WINDOW now, so a click over there reaches us as an
+  // event rather than as a callback. One way on purpose: nothing else in the
+  // app changes the route, so the rail can keep its own highlight optimistically
+  // and there is no echo to send back.
+  useTauriEvent(navSelectedChannel, (payload) => navigateTo(payload.route));
 
   const navItems = useMemo<NavDef[]>(() => {
     const items = (registry.data?.capabilities ?? [])
@@ -87,21 +94,11 @@ export function Dashboard() {
 
   return (
     <main className="flex h-full">
-      {/* The rail is a hairline, not a panel. The window's native vibrancy is
-          already the floating glass object (docs/04 §8) — wrapping the rail in a
-          second GlassPanel drew a surface on a surface and gave the eye two
-          seams to resolve where the design has one object. */}
-      {/* NO DIVIDER. The rail used to carry a hairline down its right edge and
-          it is gone on purpose: the window's own vibrancy is already one
-          floating object, and a seam drawn across the middle of it invites the
-          eye to resolve two surfaces where the design has one. It was also what
-          made the traffic lights look squeezed — the lights span wider than the
-          rail, so any full-height line at the rail's edge cut through the
-          button cluster. Removing the line removes both problems at once. */}
-      <div className="flex h-full shrink-0">
-        <Sidebar items={navItems} activeRoute={activeRoute} onSelect={(next) => navigateTo(next)} />
-      </div>
-
+      {/* No rail in here any more — it is its own window, hanging off this one
+          as an AppKit child (docs/04 §8). What is left is the panel, and it
+          draws no surface of its own: the window's native vibrancy IS the
+          floating glass object, and a GlassPanel inside it would put two seams
+          where the design has one. */}
       <div className="flex min-w-0 flex-1 flex-col">
         <PageShell title={activeTitle}>
         <ErrorBoundary

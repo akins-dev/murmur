@@ -61,9 +61,23 @@ export function PageShell({ title, actions, children }: PageShellProps) {
       <header
         data-tauri-drag-region
         onWheel={forwardWheel}
-        className="absolute inset-x-0 top-0 z-10 flex h-[var(--page-header-height)] flex-col px-[var(--page-padding-x)]"
+        className="absolute inset-x-0 top-0 z-10 flex h-[var(--page-header-height)] flex-col pr-[var(--page-padding-x)] pl-[var(--titlebar-safe-inset)]"
       >
-        {/* The title sits in the TRAFFIC-LIGHT BAND, not in the middle of the
+        {/* THE LEFT PADDING IS --titlebar-safe-inset, NOT the page padding, and
+            it became necessary the moment the rail moved into its own window.
+            macOS draws the three buttons from the window's top-left out to
+            roughly 72px. The 56px rail used to absorb them, which is the only
+            reason the title has ever looked right; with the rail gone the title
+            would start at 32px, directly underneath them.
+
+            It does leave the title indented further than the content below it.
+            That is the standard macOS arrangement — toolbar items begin after
+            the lights, body content sits on its own grid — and it is the price
+            of the operator's explicit ask that the title line up with the three
+            controls. The alternative, dropping the title to its own row below
+            the buttons, aligns with the content but stops honouring that.
+
+            The title sits in the TRAFFIC-LIGHT BAND, not in the middle of the
             header. macOS puts the three buttons at a fixed inset from the
             window's top-left and centres them in a standard 28pt title bar;
             centring the title in the taller header instead dropped it a few
