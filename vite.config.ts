@@ -26,6 +26,7 @@ export default defineConfig(async () => ({
         dashboard: fileURLToPath(new URL("./index.html", import.meta.url)),
         pill: fileURLToPath(new URL("./pill.html", import.meta.url)),
         onboarding: fileURLToPath(new URL("./onboarding.html", import.meta.url)),
+        sidebar: fileURLToPath(new URL("./sidebar.html", import.meta.url)),
       },
     },
   },

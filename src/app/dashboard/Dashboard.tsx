@@ -128,7 +128,7 @@ export function Dashboard() {
               hotkey={dictationHotkey(registry.data, settings.data)}
             />
           ) : (
-            <ScrollArea contentClassName="px-6 pb-8">
+            <ScrollArea contentClassName="px-[var(--page-padding-x)] pb-8">
               <Skeleton rows={4} />
             </ScrollArea>
           )}

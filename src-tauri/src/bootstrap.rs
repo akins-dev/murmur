@@ -127,10 +127,27 @@ fn apply_window_vibrancy(app: &AppHandle) {
     // window's. Without it the effect view is a rectangle filling the whole
     // window — which is exactly the "huge square" behind the pill. The two full
     // windows take None because for them the window IS the surface.
+    // Every window gets a radius, and the two full windows get one for the same
+    // reason the pill does. They are `transparent` with `titleBarStyle: Overlay`,
+    // so macOS paints no background of its own — the NSVisualEffectView IS the
+    // visible window. Leaving it square meant the app had system-radius corners
+    // (about 10pt) no matter what the design asked for, and rounding the WEB
+    // layer instead would have put square glass corners outside a rounded page:
+    // the pill's "huge square" bug relocated.
+    //
+    // Native traffic lights are unaffected. `decorations: false` would have got
+    // the same corners at the cost of drawing our own window buttons, and
+    // hand-made controls that feel subtly un-Mac are exactly what this app
+    // cannot afford.
+    let window_radius = crate::tray::design_token("--radius-window");
     for (label, material, radius) in [
         (PILL_WINDOW, NSVisualEffectMaterial::HudWindow, Some(crate::tray::pill_radius())),
-        (DASHBOARD_WINDOW, NSVisualEffectMaterial::Sidebar, None),
-        (ONBOARDING_WINDOW, NSVisualEffectMaterial::Popover, None),
+        // The rail is its own floating object, so it carries the window radius
+        // rather than the pill's. Sidebar material to match the dashboard it
+        // hangs beside.
+        (SIDEBAR_WINDOW, NSVisualEffectMaterial::Sidebar, Some(window_radius)),
+        (DASHBOARD_WINDOW, NSVisualEffectMaterial::Sidebar, Some(window_radius)),
+        (ONBOARDING_WINDOW, NSVisualEffectMaterial::Popover, Some(window_radius)),
     ] {
         let Some(window) = app.get_webview_window(label) else {
             continue;
@@ -148,6 +165,7 @@ fn apply_window_vibrancy(app: &AppHandle) {
 /// Window labels, matching tauri.conf.json. Typos here fail at runtime.
 pub const DASHBOARD_WINDOW: &str = "dashboard";
 pub const PILL_WINDOW: &str = "pill";
+pub const SIDEBAR_WINDOW: &str = "sidebar";
 pub const ONBOARDING_WINDOW: &str = "onboarding";
 
 /**
@@ -199,6 +217,7 @@ pub fn setup(app: &AppHandle) -> AppResult<()> {
     apply_window_vibrancy(app);
     crate::tray::adopt_pill_tokens(app);
     watch_permissions(app);
+    attach_sidebar(app);
     keep_windows_alive(app);
     report_permissions(&ports);
     start_retention_sweep(state.clone());
@@ -1172,6 +1191,93 @@ fn watch_permissions(app: &AppHandle) {
             tokio::time::sleep(if all_granted { RELAXED } else { EAGER }).await;
         }
     });
+}
+
+/**
+ * SOURCE OF TRUTH KEYWORDS: attach_sidebar, addChildWindow, detached_rail
+ * WHAT:  Sizes the navigation rail, places it to the left of the dashboard, and
+ *        makes macOS responsible for keeping it there.
+ * WHY:   The rail is a separate WINDOW because the gap between it and the main
+ *        panel has to be a real hole showing the desktop. One window cannot do
+ *        that — its vibrancy is a single rectangle covering the whole frame, so
+ *        the gap would be glass rather than nothing.
+ *
+ *        `addChildWindow` is the load-bearing call. It makes AppKit move, order,
+ *        minimise and hide the rail with its parent, which is the entire reason
+ *        this is viable: tracking the dashboard ourselves on move and resize
+ *        events is the version that lags a frame behind every drag and flickers
+ *        on a zoom.
+ *
+ *        The HEIGHT is computed from the same design tokens the rail is drawn
+ *        with, and from the number of nav entries in the registry, rather than
+ *        being a number kept in step by hand. Add a capability with a nav entry
+ *        and the window grows by exactly one item with nothing to remember —
+ *        which is the same promise the registry makes everywhere else.
+ * WHERE: Called once by setup, after the windows exist.
+ */
+fn attach_sidebar(app: &AppHandle) {
+    use crate::tray::design_token;
+
+    let (Some(rail), Some(dashboard)) = (
+        app.get_webview_window(SIDEBAR_WINDOW),
+        app.get_webview_window(DASHBOARD_WINDOW),
+    ) else {
+        tracing::warn!("the rail or the dashboard is missing; leaving them unattached");
+        return;
+    };
+
+    let nav_items = crate::registry::CAPABILITIES
+        .iter()
+        .filter(|capability| capability.nav.is_some())
+        .count() as f64;
+
+    let width = design_token("--rail-width");
+    let padding = design_token("--rail-padding");
+    let height = 2.0 * padding
+        + design_token("--mark-size-md")
+        + design_token("--rail-mark-gap")
+        + nav_items * design_token("--rail-item-size")
+        + (nav_items - 1.0).max(0.0) * design_token("--rail-item-gap");
+
+    if let Err(err) = rail.set_size(tauri::LogicalSize::new(width, height)) {
+        tracing::warn!(error = %err, "could not size the rail");
+    }
+
+    // Placed once here; every move after this is AppKit's job.
+    if let Ok(origin) = dashboard.outer_position() {
+        if let Ok(scale) = dashboard.scale_factor() {
+            let gap = (design_token("--rail-detach-gap") * scale).round() as i32;
+            let rail_width = (width * scale).round() as i32;
+            let _ = rail.set_position(tauri::PhysicalPosition::new(
+                origin.x - rail_width - gap,
+                origin.y,
+            ));
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        use objc2::rc::Retained;
+        use objc2_app_kit::{NSWindow, NSWindowOrderingMode};
+
+        let (Ok(child), Ok(parent)) = (rail.ns_window(), dashboard.ns_window()) else {
+            return;
+        };
+
+        // SAFETY: both handles come from Tauri for windows that exist, and this
+        // runs on the main thread during setup.
+        unsafe {
+            let child = child as *mut NSWindow;
+            let parent = parent as *mut NSWindow;
+            let (Some(child), Some(parent)) = (Retained::retain(child), Retained::retain(parent))
+            else {
+                return;
+            };
+            parent.addChildWindow_ordered(&child, NSWindowOrderingMode::Above);
+        }
+
+        tracing::info!(nav_items, width, height, "rail attached to the dashboard");
+    }
 }
 
 #[cfg(test)]

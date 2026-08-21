@@ -40,7 +40,7 @@ export function StatsView({ metrics, hotkey }: StatsViewProps) {
   const stats = useCommand(commands.getStats, []);
 
   return (
-    <ScrollArea contentClassName="flex flex-col gap-5 px-6 pb-8">
+    <ScrollArea contentClassName="flex flex-col gap-5 px-[var(--page-padding-x)] pb-8">
         <ViewState state={stats} onRetry={stats.reload}>
           {(data) =>
             data.total_sessions === 0 ? (

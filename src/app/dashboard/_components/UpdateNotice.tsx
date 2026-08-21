@@ -79,7 +79,7 @@ export function UpdateNotice() {
   return (
     <div
       role="status"
-      className="hairline-t flex shrink-0 items-center justify-between gap-4 px-6 py-3"
+      className="hairline-t flex shrink-0 items-center justify-between gap-4 px-[var(--page-padding-x)] py-3"
     >
       <p className="min-w-0 truncate text-label text-text-secondary">
         {error ? (

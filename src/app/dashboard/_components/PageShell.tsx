@@ -61,7 +61,7 @@ export function PageShell({ title, actions, children }: PageShellProps) {
       <header
         data-tauri-drag-region
         onWheel={forwardWheel}
-        className="absolute inset-x-0 top-0 z-10 flex h-[var(--page-header-height)] flex-col px-6"
+        className="absolute inset-x-0 top-0 z-10 flex h-[var(--page-header-height)] flex-col px-[var(--page-padding-x)]"
       >
         {/* The title sits in the TRAFFIC-LIGHT BAND, not in the middle of the
             header. macOS puts the three buttons at a fixed inset from the

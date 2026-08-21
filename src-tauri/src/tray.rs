@@ -112,6 +112,13 @@ pub fn show_dashboard(app: &AppHandle) {
         tracing::warn!(error = %err, "could not focus the dashboard");
     }
 
+    // The rail is a child window: AppKit orders, moves and hides it with the
+    // dashboard, but it still has to be shown once, because it is created
+    // hidden so it never flashes on screen before its parent exists.
+    if let Some(rail) = app.get_webview_window(crate::bootstrap::SIDEBAR_WINDOW) {
+        let _ = rail.show();
+    }
+
     tracing::info!("dashboard opened");
 }
 
@@ -309,6 +316,42 @@ const PILL_BOTTOM_INSET_PT: f64 = 96.0;
  *        means the value cannot drift, because there is only ever one of it.
  * WHERE: Read by fit_pill_to_state, position_pill and the vibrancy setup.
  */
+/**
+ * SOURCE OF TRUTH KEYWORDS: design_token, tokens_css, one_source
+ * WHAT:  Reads a numeric design token out of the stylesheet the UI is drawn
+ *        with.
+ * WHY:   Native window geometry and CSS have to agree — a window whose corner
+ *        radius differs from the vibrancy layer inside it shows the difference
+ *        as a hard square edge, which is how the pill ended up with a blurred
+ *        rectangle behind it. Parsing the tokens rather than copying them means
+ *        there is only ever one of each number, so a designer changing one is
+ *        the whole change.
+ *
+ *        Compiled in with `include_str!`, so the file is read at BUILD time and
+ *        a renamed token is a startup panic naming the token rather than a
+ *        silently wrong window.
+ * WHERE: PillMetrics, and the window vibrancy radius in bootstrap.
+ */
+pub fn design_token(name: &str) -> f64 {
+    const TOKENS: &str = include_str!("../../src/styles/tokens.css");
+
+    TOKENS
+        .lines()
+        .find_map(|line| {
+            let (key, value) = line.split_once(':')?;
+            if key.trim() != name {
+                return None;
+            }
+            value
+                .trim()
+                .trim_end_matches(';')
+                .trim_end_matches("px")
+                .parse::<f64>()
+                .ok()
+        })
+        .unwrap_or_else(|| panic!("{name} is missing from tokens.css, which sizes native windows"))
+}
+
 static PILL: std::sync::LazyLock<PillMetrics> = std::sync::LazyLock::new(PillMetrics::from_tokens);
 
 struct PillMetrics {
@@ -333,29 +376,7 @@ struct PillMetrics {
 
 impl PillMetrics {
     fn from_tokens() -> Self {
-        // Compiled in, so the file is read at build time and a missing token is
-        // a startup panic rather than a silently wrong window.
-        const TOKENS: &str = include_str!("../../src/styles/tokens.css");
-
-        let read = |name: &str| -> f64 {
-            TOKENS
-                .lines()
-                .find_map(|line| {
-                    let (key, value) = line.split_once(':')?;
-                    if key.trim() != name {
-                        return None;
-                    }
-                    value
-                        .trim()
-                        .trim_end_matches(';')
-                        .trim_end_matches("px")
-                        .parse::<f64>()
-                        .ok()
-                })
-                .unwrap_or_else(|| {
-                    panic!("{name} is missing from tokens.css, which sizes the pill window")
-                })
-        };
+        let read = design_token;
 
         Self {
             exit_ms: read("--pill-exit-duration-ms"),

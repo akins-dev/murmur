@@ -117,7 +117,37 @@
   --space-6: 32px;
   --space-8: 48px;
 
+  /* ── The detached sidebar window (docs/04 §8) ────────────────────────
+   * The rail is its own WINDOW now, floating beside the dashboard, so these
+   * are window dimensions and src-tauri reads them through design_token().
+   *
+   * Its height is CONTENT-SIZED rather than matched to the dashboard, because
+   * the thing the operator asked for is a widget hanging beside the app, not a
+   * second column of it. That makes the height depend on how many nav entries
+   * the registry declares, so it is expressed as a formula rather than a
+   * number — add a capability with a nav entry and the rail grows by exactly
+   * one item, with no number to remember to update:
+   *
+   *   height = 2*--rail-padding
+   *          + --mark-size-md + --rail-mark-gap
+   *          + N*--rail-item-size + (N-1)*--rail-item-gap
+   *
+   * There is NO drag region in the rail: it is an addChildWindow of the
+   * dashboard, and dragging a child moves only the child, which would tear it
+   * away from the window it is meant to be attached to. The dashboard's header
+   * is still the drag surface for the app. */
+  /*
+   * The gap between the detached rail and the main window. Read by
+   * src-tauri/src/bootstrap.rs to place the child window, so the distance the
+   * design intends is the distance macOS uses — there is no second number.
+   */
+  --rail-detach-gap: 12px;
+
   --rail-width: 56px;
+  --rail-item-size: 36px;
+  --rail-item-gap: 4px;
+  --rail-padding: 12px;
+  --rail-mark-gap: 16px;
   --control-height: 32px;
   --control-height-sm: 28px;
 
@@ -288,6 +318,22 @@
    * nothing, which is what the operator described and the only version that
    * survives a translucent background. */
   --page-header-height: 52px;
+
+  /* How far page content sits from the window's edge. 32px, up from 24: the
+   * window's corners are now --radius-window (26px), and content padded less
+   * than the radius crowds the curve — the eye reads the first character of a
+   * heading as touching the rounded edge even when it technically clears it. */
+  --page-padding-x: 32px;
+
+  /* WHAT THE TRAFFIC LIGHTS NEED ON THEIR LEFT. macOS draws them from the
+   * window's top-left out to roughly 72px, and they overlap whatever is there.
+   * Today the 56px rail absorbs them and the page title starts clear at 80px.
+   * THE MOMENT THE RAIL BECOMES ITS OWN WINDOW that protection disappears and
+   * the title would start at --page-padding-x — straight underneath the three
+   * buttons. The header's left padding has to become this instead. Unused
+   * until the rail detaches; applying it while the rail is still in the window
+   * would inset the title twice. */
+  --titlebar-safe-inset: 80px;
 
   /* THE BAND macOS DRAWS THE TRAFFIC LIGHTS INTO, and the only thing the page
    * title is allowed to align itself to. The lights are placed by the system at

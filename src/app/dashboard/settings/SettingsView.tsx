@@ -140,14 +140,14 @@ export function SettingsView({ registry, section }: SettingsViewProps) {
   // forgotten the user's preference, which is worse than showing nothing.
   if (!settings.data) {
     return (
-      <ScrollArea contentClassName="px-6">
+      <ScrollArea contentClassName="px-[var(--page-padding-x)]">
           <Skeleton rows={8} />
         </ScrollArea>
     );
   }
 
   return (
-    <ScrollArea contentClassName="flex flex-col gap-8 px-6 pb-8">
+    <ScrollArea contentClassName="flex flex-col gap-8 px-[var(--page-padding-x)] pb-8">
         {writeError ? <ErrorSurface size="compact" error={writeError} /> : null}
         {SECTION_ORDER.map((key) => {
           const defs = grouped.get(key) ?? [];

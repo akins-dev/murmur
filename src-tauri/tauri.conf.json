@@ -30,6 +30,19 @@
         "acceptFirstMouse": true
       },
       {
+        "label": "sidebar",
+        "url": "sidebar.html",
+        "width": 56,
+        "height": 220,
+        "resizable": false,
+        "visible": false,
+        "transparent": true,
+        "decorations": false,
+        "shadow": true,
+        "skipTaskbar": true,
+        "focus": false
+      },
+      {
         "label": "pill",
         "url": "pill.html",
         "width": 176,

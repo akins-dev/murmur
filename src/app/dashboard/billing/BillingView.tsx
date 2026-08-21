@@ -26,7 +26,7 @@ import { ScrollArea } from "@/components/global";
 
 export function BillingView() {
   return (
-    <ScrollArea contentClassName="flex min-h-full flex-col items-center justify-center gap-3 px-6 pb-8 text-center">
+    <ScrollArea contentClassName="flex min-h-full flex-col items-center justify-center gap-3 px-[var(--page-padding-x)] pb-8 text-center">
       <p className="text-display text-text-primary">lol</p>
       <p className="max-w-96 text-body text-text-secondary">
         This is absolutely free. Enjoy <span aria-label="grey heart">🩶</span>
