@@ -116,7 +116,14 @@ pub fn show_dashboard(app: &AppHandle) {
     // dashboard, but it still has to be shown once, because it is created
     // hidden so it never flashes on screen before its parent exists.
     if let Some(rail) = app.get_webview_window(crate::bootstrap::SIDEBAR_WINDOW) {
+        // Order matters and each step is load-bearing. Place it while the
+        // dashboard has a real position on screen; show it; and only THEN make
+        // it a child — because attaching is what puts a window on screen, and
+        // attaching early is what left it stranded at the bottom of the display
+        // with nothing to hang from. See bootstrap::attach_rail.
+        crate::bootstrap::place_rail(app);
         let _ = rail.show();
+        crate::bootstrap::attach_rail(app);
     }
 
     tracing::info!("dashboard opened");

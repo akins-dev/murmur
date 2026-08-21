@@ -218,6 +218,7 @@ pub fn setup(app: &AppHandle) -> AppResult<()> {
     crate::tray::adopt_pill_tokens(app);
     watch_permissions(app);
     attach_sidebar(app);
+    keep_rail_centred(app);
     keep_windows_alive(app);
     report_permissions(&ports);
     start_retention_sweep(state.clone());
@@ -1243,16 +1244,34 @@ fn attach_sidebar(app: &AppHandle) {
         tracing::warn!(error = %err, "could not size the rail");
     }
 
-    // Placed once here; every move after this is AppKit's job.
-    if let Ok(origin) = dashboard.outer_position() {
-        if let Ok(scale) = dashboard.scale_factor() {
-            let gap = (design_token("--rail-detach-gap") * scale).round() as i32;
-            let rail_width = (width * scale).round() as i32;
-            let _ = rail.set_position(tauri::PhysicalPosition::new(
-                origin.x - rail_width - gap,
-                origin.y,
-            ));
-        }
+
+    let _ = dashboard;
+    tracing::info!(nav_items, width, height, "rail sized from the design tokens");
+}
+
+/**
+ * SOURCE OF TRUTH KEYWORDS: attach_rail, addChildWindow_orders_it_in
+ * WHAT:  Makes the rail a child of the dashboard, once, the first time the
+ *        dashboard is actually on screen.
+ * WHY:   `addChildWindow` DISPLAYS the child. That is the whole bug this
+ *        function exists to avoid: attaching during setup — before the
+ *        dashboard has been shown — put the rail on screen immediately, at its
+ *        default position, hanging beside nothing. It appeared at the bottom of
+ *        the display with no window near it, which reads as a placement bug and
+ *        is a lifecycle one.
+ *
+ *        So it is attached only after its parent exists on screen and the rail
+ *        has been placed beside it. From then on AppKit owns the relationship:
+ *        move, order, minimise and hide all follow the parent for free.
+ * WHERE: Called by tray::show_dashboard, after place_rail.
+ */
+pub fn attach_rail(app: &AppHandle) {
+    // Attaching twice is not harmful, but it is not free either, and a second
+    // call re-orders the window for no reason.
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static ATTACHED: AtomicBool = AtomicBool::new(false);
+    if ATTACHED.swap(true, Ordering::SeqCst) {
+        return;
     }
 
     #[cfg(target_os = "macos")]
@@ -1260,12 +1279,19 @@ fn attach_sidebar(app: &AppHandle) {
         use objc2::rc::Retained;
         use objc2_app_kit::{NSWindow, NSWindowOrderingMode};
 
+        let (Some(rail), Some(dashboard)) = (
+            app.get_webview_window(SIDEBAR_WINDOW),
+            app.get_webview_window(DASHBOARD_WINDOW),
+        ) else {
+            return;
+        };
+
         let (Ok(child), Ok(parent)) = (rail.ns_window(), dashboard.ns_window()) else {
             return;
         };
 
         // SAFETY: both handles come from Tauri for windows that exist, and this
-        // runs on the main thread during setup.
+        // runs on the main thread from a Tauri event.
         unsafe {
             let child = child as *mut NSWindow;
             let parent = parent as *mut NSWindow;
@@ -1276,7 +1302,92 @@ fn attach_sidebar(app: &AppHandle) {
             parent.addChildWindow_ordered(&child, NSWindowOrderingMode::Above);
         }
 
-        tracing::info!(nav_items, width, height, "rail attached to the dashboard");
+        tracing::info!("rail attached to the dashboard");
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    let _ = app;
+}
+
+/**
+ * SOURCE OF TRUTH KEYWORDS: keep_rail_centred, resize
+ * WHAT:  Re-centres the rail when the dashboard changes height.
+ * WHY:   AppKit carries a child window at a FIXED OFFSET when the parent moves,
+ *        which is most of what we want and is why this is a child window at
+ *        all. A resize is the case it cannot cover: growing the window
+ *        downwards leaves the rail level with the old midline, so the thing
+ *        drifts off centre exactly when someone is looking at it.
+ * WHERE: Registered once by setup.
+ */
+fn keep_rail_centred(app: &AppHandle) {
+    let handle = app.clone();
+    if let Some(dashboard) = app.get_webview_window(DASHBOARD_WINDOW) {
+        dashboard.on_window_event(move |event| {
+            if matches!(event, tauri::WindowEvent::Resized(_)) {
+                place_rail(&handle);
+            }
+        });
+    }
+}
+
+/**
+ * SOURCE OF TRUTH KEYWORDS: place_rail, beside_not_over, vertically_centred
+ * WHAT:  Puts the rail immediately to the LEFT of the dashboard, centred on its
+ *        vertical midline.
+ * WHY:   Called every time the dashboard is shown, and NOT once at startup,
+ *        which is the bug this replaces. `attach_sidebar` runs during setup —
+ *        before `show_first_window` has placed and centred the dashboard — so
+ *        reading its position then returns coordinates it does not have yet.
+ *        The rail was pinned to that stale origin and the dashboard then moved
+ *        out from under it, which put the rail ON TOP of the window instead of
+ *        beside it. It looked like a layout mistake and was a timing one.
+ *
+ *        Vertically CENTRED rather than top-aligned because the rail is a
+ *        widget hanging beside the app, not a second column of it — the thing
+ *        it is modelled on floats against the middle of the window's edge.
+ *
+ *        Only the initial placement is ours. Once the parent moves, AppKit
+ *        carries the child at a fixed offset, which is exactly why this is a
+ *        child window; re-running it on every drag would fight that.
+ * WHERE: Called by tray::show_dashboard, and on a dashboard resize.
+ */
+pub fn place_rail(app: &AppHandle) {
+    let (Some(rail), Some(dashboard)) = (
+        app.get_webview_window(SIDEBAR_WINDOW),
+        app.get_webview_window(DASHBOARD_WINDOW),
+    ) else {
+        return;
+    };
+
+    let (Ok(origin), Ok(parent), Ok(size), Ok(scale)) = (
+        dashboard.outer_position(),
+        dashboard.outer_size(),
+        rail.outer_size(),
+        dashboard.scale_factor(),
+    ) else {
+        return;
+    };
+
+    let gap = (crate::tray::design_token("--rail-detach-gap") * scale).round() as i32;
+    let x = origin.x - size.width as i32 - gap;
+    let y = origin.y + (parent.height as i32 - size.height as i32) / 2;
+
+    tracing::info!(
+        dash_x = origin.x,
+        dash_y = origin.y,
+        dash_w = parent.width,
+        dash_h = parent.height,
+        rail_w = size.width,
+        rail_h = size.height,
+        scale,
+        gap,
+        target_x = x,
+        target_y = y,
+        "placing the rail"
+    );
+
+    if let Err(err) = rail.set_position(tauri::PhysicalPosition::new(x, y)) {
+        tracing::warn!(error = %err, "could not place the rail beside the dashboard");
     }
 }
 
