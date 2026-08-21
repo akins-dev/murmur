@@ -1386,10 +1386,45 @@ pub fn attach_rail(app: &AppHandle) {
  * WHERE: Registered once by setup.
  */
 fn keep_rail_centred(app: &AppHandle) {
+    use std::sync::Mutex;
+
+    /*
+     * SOURCE OF TRUTH KEYWORDS: only_on_a_real_resize, drag_glitch
+     * macOS reports a window's frame changing as `Resized`, and a frame
+     * includes its ORIGIN — so this fires on every frame of a drag, not only
+     * when the window's size changes. Acting on all of them called
+     * setFrame_display on the child window dozens of times a second while
+     * AppKit was running a drag, which interrupted the drag: the window stopped
+     * following the pointer and came back gripped at the wrong offset. 448
+     * repositions in a single session, nearly all of them during drags.
+     *
+     * Only a genuine SIZE change needs anything done, because a child window is
+     * already carried by its parent on a move — that is the whole reason it is
+     * a child. So the last size is remembered and an event that does not change
+     * it is ignored, which takes a drag from hundreds of calls to none.
+     */
+    static LAST_SIZE: Mutex<Option<(u32, u32)>> = Mutex::new(None);
+
     let handle = app.clone();
     if let Some(dashboard) = app.get_webview_window(DASHBOARD_WINDOW) {
         dashboard.on_window_event(move |event| {
-            if matches!(event, tauri::WindowEvent::Resized(_)) {
+            let tauri::WindowEvent::Resized(size) = event else {
+                return;
+            };
+            let now = (size.width, size.height);
+
+            let changed = match LAST_SIZE.lock() {
+                Ok(mut last) => {
+                    let changed = *last != Some(now);
+                    if changed {
+                        *last = Some(now);
+                    }
+                    changed
+                }
+                Err(_) => false,
+            };
+
+            if changed {
                 place_rail(&handle);
             }
         });

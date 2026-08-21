@@ -591,6 +591,18 @@ impl SessionActor {
         let peak_amplitude = self.chunker.peak_amplitude();
         let tail = self.chunker.close_tail();
 
+        /*
+         * SOURCE OF TRUTH KEYWORDS: request_before_take, tail_language
+         * Built BEFORE the language is moved out, and the order is the whole
+         * point. `transcribe_request` reads `self.detected_language` to pin the
+         * tail to the language the interior chunks identified; taking it into
+         * the pending delivery first left the tail with no hint, so the last
+         * fragment of every auto-detected session was decoded as if the
+         * language were unknown. On a short utterance the tail IS the whole
+         * recording, which is exactly where detection is least reliable.
+         */
+        let request = self.transcribe_request();
+
         let pending = PendingDelivery {
             session_id: session_id.clone(),
             assembler: std::mem::take(&mut self.assembler),
@@ -616,7 +628,6 @@ impl SessionActor {
             return;
         };
 
-        let request = self.transcribe_request();
         let deadline = Duration::from_millis(pending.settings.finalize_timeout_ms);
         self.pending.insert(session_id.clone(), pending);
 
