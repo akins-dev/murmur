@@ -22,11 +22,14 @@
  */
 
 import { useState } from "react";
-import { emit } from "@tauri-apps/api/event";
+import { emitTo } from "@tauri-apps/api/event";
 import { SidebarWindow } from "@/app/sidebar";
 import { commands } from "@/lib/bindings";
 import { useCommand } from "@/lib/ipc";
 import { NAV_SELECTED } from "@/lib/window-events";
+
+/** The dashboard window's label, as declared in tauri.conf.json. */
+const DASHBOARD_LABEL = "dashboard";
 import "@/styles/global.css";
 import { createRoot } from "react-dom/client";
 
@@ -48,7 +51,11 @@ function SidebarEntry() {
       activeRoute={active}
       onSelect={(next) => {
         setRoute(next);
-        void emit(NAV_SELECTED, { route: next });
+        // emitTo, not emit. A broadcast relies on the dashboard's listener
+        // being registered for globally-emitted events; targeting the window
+        // by label is unambiguous and cannot silently miss. The rail's whole
+        // job is to reach that one window.
+        void emitTo(DASHBOARD_LABEL, NAV_SELECTED, { route: next });
       }}
     />
   );

@@ -121,9 +121,22 @@ pub fn show_dashboard(app: &AppHandle) {
         // it a child — because attaching is what puts a window on screen, and
         // attaching early is what left it stranded at the bottom of the display
         // with nothing to hang from. See bootstrap::attach_rail.
-        crate::bootstrap::place_rail(app);
+        /*
+         * SHOW FIRST, THEN PLACE. Placing a hidden window and then showing it
+         * loses the placement: the frame set while it was ordered out is not
+         * what comes back on screen — macOS restores the frame the window last
+         * had. The rail was computed correctly, to the left of the dashboard
+         * and vertically centred, and then reappeared wherever it had been
+         * before, which is why the logged coordinates and the pixels on screen
+         * disagreed.
+         *
+         * Placed again after attaching, because addChildWindow re-orders the
+         * window and is the last thing that can move it.
+         */
         let _ = rail.show();
+        crate::bootstrap::place_rail(app);
         crate::bootstrap::attach_rail(app);
+        crate::bootstrap::place_rail(app);
     }
 
     tracing::info!("dashboard opened");

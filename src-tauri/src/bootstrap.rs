@@ -1217,7 +1217,6 @@ fn watch_permissions(app: &AppHandle) {
  * WHERE: Called once by setup, after the windows exist.
  */
 fn attach_sidebar(app: &AppHandle) {
-    use crate::tray::design_token;
 
     let (Some(rail), Some(dashboard)) = (
         app.get_webview_window(SIDEBAR_WINDOW),
@@ -1227,18 +1226,11 @@ fn attach_sidebar(app: &AppHandle) {
         return;
     };
 
+    let (width, height) = rail_size_points();
     let nav_items = crate::registry::CAPABILITIES
         .iter()
         .filter(|capability| capability.nav.is_some())
-        .count() as f64;
-
-    let width = design_token("--rail-width");
-    let padding = design_token("--rail-padding");
-    let height = 2.0 * padding
-        + design_token("--mark-size-md")
-        + design_token("--rail-mark-gap")
-        + nav_items * design_token("--rail-item-size")
-        + (nav_items - 1.0).max(0.0) * design_token("--rail-item-gap");
+        .count();
 
     if let Err(err) = rail.set_size(tauri::LogicalSize::new(width, height)) {
         tracing::warn!(error = %err, "could not size the rail");
@@ -1351,6 +1343,39 @@ fn keep_rail_centred(app: &AppHandle) {
  *        child window; re-running it on every drag would fight that.
  * WHERE: Called by tray::show_dashboard, and on a dashboard resize.
  */
+/**
+ * SOURCE OF TRUTH KEYWORDS: rail_size_points, never_measure_the_window
+ * WHAT:  The rail's size in POINTS, derived from the design tokens and the
+ *        number of nav entries.
+ * WHY:   Derived, never measured. `outer_size()` reported 56x220 — the LOGICAL
+ *        size — while the dashboard's `outer_size()` reported physical pixels,
+ *        so the placement arithmetic subtracted points from pixels and put the
+ *        rail in the wrong place by exactly the scale factor. Measuring a
+ *        window whose units you cannot be certain of is the whole bug; a token
+ *        multiplied by a known scale factor has no such ambiguity.
+ *
+ *        Same rule that fixed the pill: the window's own reported geometry is
+ *        not evidence, the design tokens are.
+ * WHERE: attach_sidebar sizes the window with it; place_rail places with it.
+ */
+fn rail_size_points() -> (f64, f64) {
+    use crate::tray::design_token;
+
+    let nav_items = crate::registry::CAPABILITIES
+        .iter()
+        .filter(|capability| capability.nav.is_some())
+        .count() as f64;
+
+    let padding = design_token("--rail-padding");
+    let height = 2.0 * padding
+        + design_token("--mark-size-md")
+        + design_token("--rail-mark-gap")
+        + nav_items * design_token("--rail-item-size")
+        + (nav_items - 1.0).max(0.0) * design_token("--rail-item-gap");
+
+    (design_token("--rail-width"), height)
+}
+
 pub fn place_rail(app: &AppHandle) {
     let (Some(rail), Some(dashboard)) = (
         app.get_webview_window(SIDEBAR_WINDOW),
@@ -1359,35 +1384,71 @@ pub fn place_rail(app: &AppHandle) {
         return;
     };
 
-    let (Ok(origin), Ok(parent), Ok(size), Ok(scale)) = (
-        dashboard.outer_position(),
-        dashboard.outer_size(),
-        rail.outer_size(),
-        dashboard.scale_factor(),
-    ) else {
-        return;
-    };
+    /*
+     * SOURCE OF TRUTH KEYWORDS: appkit_coordinates, one_coordinate_space
+     * DONE IN APPKIT'S OWN SPACE, and that is the fix rather than a detail.
+     *
+     * `set_position` takes top-left-origin PHYSICAL pixels; an NSWindow frame
+     * is bottom-left-origin POINTS, with y increasing upward. Asking Tauri to
+     * place the rail at (688, 935) put it at (831, -1116) — above the top of
+     * the display — because two conversions were fighting: a y-axis flip and a
+     * points-versus-pixels scale.
+     *
+     * Reading the parent's frame and positioning the child in the SAME space
+     * removes every conversion. The centring arithmetic is then trivially
+     * correct whichever way y points, because both windows are measured the
+     * same way — which is the whole reason to work relative to the parent
+     * rather than to the screen.
+     */
+    #[cfg(target_os = "macos")]
+    {
+        use objc2::rc::Retained;
+        use objc2_app_kit::NSWindow;
 
-    let gap = (crate::tray::design_token("--rail-detach-gap") * scale).round() as i32;
-    let x = origin.x - size.width as i32 - gap;
-    let y = origin.y + (parent.height as i32 - size.height as i32) / 2;
+        let (Ok(child), Ok(parent)) = (rail.ns_window(), dashboard.ns_window()) else {
+            return;
+        };
 
-    tracing::info!(
-        dash_x = origin.x,
-        dash_y = origin.y,
-        dash_w = parent.width,
-        dash_h = parent.height,
-        rail_w = size.width,
-        rail_h = size.height,
-        scale,
-        gap,
-        target_x = x,
-        target_y = y,
-        "placing the rail"
-    );
+        // SAFETY: both handles come from Tauri for live windows, and this runs
+        // on the main thread from a Tauri event.
+        unsafe {
+            let child = child as *mut NSWindow;
+            let parent = parent as *mut NSWindow;
+            let (Some(child), Some(parent)) = (Retained::retain(child), Retained::retain(parent))
+            else {
+                return;
+            };
 
-    if let Err(err) = rail.set_position(tauri::PhysicalPosition::new(x, y)) {
-        tracing::warn!(error = %err, "could not place the rail beside the dashboard");
+            let (rail_w, rail_h) = rail_size_points();
+            let gap = crate::tray::design_token("--rail-detach-gap");
+
+            // Size in points too, so the frame we place is the frame we sized.
+            let mut frame = child.frame();
+            frame.size.width = rail_w;
+            frame.size.height = rail_h;
+
+            let host = parent.frame();
+            frame.origin.x = host.origin.x - rail_w - gap;
+            frame.origin.y = host.origin.y + (host.size.height - rail_h) / 2.0;
+
+            child.setFrame_display(frame, true);
+
+            tracing::info!(
+                x = frame.origin.x,
+                y = frame.origin.y,
+                w = rail_w,
+                h = rail_h,
+                host_x = host.origin.x,
+                host_y = host.origin.y,
+                host_h = host.size.height,
+                "rail placed beside the dashboard"
+            );
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (rail, dashboard);
     }
 }
 
@@ -1743,6 +1804,56 @@ mod tests {
      *        and tried to talk to it.
      * WHERE: Guards entitlements.plist and its reference in tauri.conf.json.
      */
+    /**
+     * SOURCE OF TRUTH KEYWORDS: every_window_has_a_capability, silent_ipc_refusal
+     * WHAT:  Every window declared in tauri.conf.json must appear in a
+     *        capability's window list.
+     * WHY:   Tauri v2 gates CORE and PLUGIN calls per window, and refuses them
+     *        SILENTLY for a window it has no capability for. App-defined
+     *        commands are not gated, which is what makes the failure so hard to
+     *        read: the window loads its data, renders perfectly, and every
+     *        cross-window event it emits is dropped at the boundary with no
+     *        error on either side.
+     *
+     *        That is exactly what happened to the detached rail. It drew its
+     *        icons from the registry — an app command, allowed — and its one
+     *        `emitTo` to the dashboard was refused, so navigation did nothing
+     *        and both halves looked correct in isolation. It cost several
+     *        rounds with the operator to find.
+     * WHERE: Guards capabilities/default.json against tauri.conf.json.
+     */
+    #[test]
+    fn every_window_is_granted_a_capability() {
+        let conf: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+            .expect("tauri.conf.json parses");
+        let capability: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/default.json"))
+                .expect("capabilities/default.json parses");
+
+        let granted: Vec<&str> = capability["windows"]
+            .as_array()
+            .expect("a capability must list its windows")
+            .iter()
+            .filter_map(|w| w.as_str())
+            .collect();
+        assert!(!granted.is_empty(), "no windows are granted anything");
+
+        let declared = conf["app"]["windows"]
+            .as_array()
+            .expect("tauri.conf.json declares windows");
+        assert!(!declared.is_empty(), "no windows declared — the check would be vacuous");
+
+        for window in declared {
+            let label = window["label"].as_str().expect("every window has a label");
+            assert!(
+                granted.contains(&label),
+                "window `{label}` is declared but appears in no capability. It will render \
+                 and load data normally, and every core or plugin call it makes — including \
+                 any cross-window event — will be refused silently."
+            );
+        }
+    }
+
     #[test]
     fn the_bundle_declares_the_microphone_entitlement() {
         let entitlements = include_str!("../entitlements.plist");

@@ -18,7 +18,7 @@
  * WHERE: Emitted by src/entries/sidebar.tsx, consumed by app/dashboard.
  */
 
-import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { TauriEventChannel } from "./use-event";
 
 /** The detached rail asking the dashboard to open a route. */
@@ -28,6 +28,25 @@ export interface NavSelected {
   route: string;
 }
 
+/**
+ * Registered on THIS WEBVIEW BY LABEL, not with the global `listen`.
+ *
+ * The rail sends with `emitTo(DASHBOARD_LABEL, ...)`, which carries the target
+ * `{ kind: "AnyLabel", label: "dashboard" }`. A global `listen()` registers with
+ * `{ kind: "Any" }` and by the documented semantics should still match — but
+ * "should still match" is not a thing to be unsure about in the one wire the
+ * navigation runs over, and the failure is silent on both sides: the rail emits
+ * successfully, the dashboard is listening successfully, and nothing happens.
+ * Listening on the current webview matches BOTH a label-targeted emit and a
+ * global broadcast, so it is correct whichever way the sender is written.
+ *
+ * getCurrentWebviewWindow() is called inside listen rather than at module load:
+ * outside a Tauri webview it throws, and this module is imported by a bundle
+ * that has to survive being opened in a plain browser.
+ */
 export const navSelectedChannel: TauriEventChannel<NavSelected> = {
-  listen: (callback) => listen<NavSelected>(NAV_SELECTED, (event) => callback({ payload: event.payload })),
+  listen: (callback) =>
+    getCurrentWebviewWindow().listen<NavSelected>(NAV_SELECTED, (event) =>
+      callback({ payload: event.payload }),
+    ),
 };

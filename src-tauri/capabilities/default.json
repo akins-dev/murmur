@@ -1,8 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Murmur's three windows. Tauri v2 refuses any plugin call not listed here, so a missing entry fails at runtime rather than at build time.",
-  "windows": ["dashboard", "pill", "onboarding"],
+  "description": "Murmur's four windows. Tauri v2 refuses any CORE or PLUGIN call from a window not listed here, and does so silently \u2014 app-defined commands still work, so a missing window renders and loads data perfectly while every cross-window event it sends is dropped at the boundary. That is exactly how the detached rail came to draw itself correctly and navigate nowhere.",
+  "windows": [
+    "dashboard",
+    "sidebar",
+    "pill",
+    "onboarding"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-show",
@@ -13,6 +18,7 @@
     "core:window:allow-set-size",
     "core:window:allow-start-dragging",
     "core:event:default",
+    "core:event:allow-emit-to",
     "core:app:default",
     "opener:default",
     "global-shortcut:default",
