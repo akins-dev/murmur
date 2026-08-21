@@ -229,7 +229,10 @@ const ALL_MODIFIER_FLAGS: u64 = 0x0002_0000 | 0x0004_0000 | 0x0008_0000 | 0x0010
  */
 pub fn watch_modifier_tap(
     modifier: KeyModifier,
-    on_trigger: impl Fn() + Send + 'static,
+    // `Sync` as well as `Send`: the handler is shared across tap re-installs
+    // via an Arc. Every caller passes a closure over an AppHandle, which is
+    // already both.
+    on_trigger: impl Fn() + Send + Sync + 'static,
 ) -> Option<ModifierTap> {
     use core_foundation::runloop::CFRunLoop;
     use core_graphics::event::{
@@ -243,15 +246,52 @@ pub fn watch_modifier_tap(
     let thread_started = Arc::clone(&started);
 
     let watched = flag_for(modifier);
+    // Shared because the tap is re-installed in a loop below and each install
+    // needs its own copy of the handler.
+    let on_trigger = Arc::new(on_trigger);
 
     std::thread::Builder::new()
         .name("murmur-modifier-tap".into())
         .spawn(move || {
+            /*
+             * SOURCE OF TRUTH KEYWORDS: reinstall_loop, TapDisabledByTimeout,
+             *   secure_input_kills_taps, permission_without_restart
+             * WHY THIS IS A LOOP AND NOT A SINGLE INSTALL:
+             *
+             * macOS DISABLES event taps behind your back, and tells you by
+             * delivering one of two synthetic events — TapDisabledByTimeout if
+             * a callback was slow, TapDisabledByUserInput when something takes
+             * exclusive control of input, which INCLUDES every Secure Input
+             * session: a password field, a sudo prompt, a keychain dialog, and
+             * the permission prompts our own onboarding puts on screen.
+             *
+             * A callback that ignores those events leaves the tap dead
+             * permanently. That is precisely what the operator hit: the hotkey
+             * worked, he granted a permission, and it never fired again until
+             * he restarted the app. There is no error and nothing in the log —
+             * the tap simply stops being delivered events.
+             *
+             * The same loop fixes a second complaint with the same shape. If
+             * Accessibility is not granted yet, installation FAILS; without a
+             * retry, granting it later does nothing until the app is restarted,
+             * which is exactly what he described having to do. Retrying means
+             * the grant takes effect on its own.
+             */
             // The tap callback is `Fn`, not `FnMut`, so the recogniser's state
             // lives behind a lock. Uncontended in practice: only the run-loop
             // thread of this function ever touches it.
+            let mut reported_failure = false;
+
+            while !thread_stop.load(Ordering::Relaxed) {
+            // Re-created per install: a tap that was disabled mid-gesture must
+            // not resume with half a gesture remembered.
             let state = parking_lot::Mutex::new((TapDetector::new(), 0u64));
             let start = std::time::Instant::now();
+
+            let reinstall = Arc::new(AtomicBool::new(false));
+            let callback_reinstall = Arc::clone(&reinstall);
+            let on_trigger = Arc::clone(&on_trigger);
+            let loop_stop = Arc::clone(&thread_stop);
 
             let installed = CGEventTap::with_enabled(
                 CGEventTapLocation::HID,
@@ -265,6 +305,18 @@ pub fn watch_modifier_tap(
                     let (detector, previous_flags) = &mut *guard;
 
                     let observed = match event_type {
+                        // The system just switched us off. Ask the thread to
+                        // install a fresh tap; re-enabling this one from inside
+                        // its own callback would need the port we do not hold.
+                        CGEventType::TapDisabledByTimeout
+                        | CGEventType::TapDisabledByUserInput => {
+                            tracing::warn!(
+                                ?event_type,
+                                "the modifier tap was disabled by macOS; reinstalling"
+                            );
+                            callback_reinstall.store(true, Ordering::Relaxed);
+                            return CallbackResult::Keep;
+                        }
                         CGEventType::KeyDown => Some(TapEvent::KeyPressed),
                         CGEventType::FlagsChanged => {
                             let flags = event.get_flags().bits();
@@ -302,8 +354,11 @@ pub fn watch_modifier_tap(
                 },
                 || {
                     thread_started.store(true, Ordering::Relaxed);
-                    // Wakes every 250ms so the stop flag is noticed promptly.
-                    while !thread_stop.load(Ordering::Relaxed) {
+                    // Wakes every 250ms so the stop flag and a reinstall
+                    // request are both noticed promptly.
+                    while !loop_stop.load(Ordering::Relaxed)
+                        && !reinstall.load(Ordering::Relaxed)
+                    {
                         CFRunLoop::run_in_mode(
                             unsafe { core_foundation::runloop::kCFRunLoopDefaultMode },
                             Duration::from_millis(250),
@@ -314,9 +369,20 @@ pub fn watch_modifier_tap(
             );
 
             if installed.is_err() {
-                tracing::error!(
-                    "could not install the modifier event tap; Accessibility is probably not granted"
-                );
+                // Logged once, not every retry: Accessibility may simply not be
+                // granted yet, and a line every two seconds forever would bury
+                // everything else in the file.
+                if !reported_failure {
+                    reported_failure = true;
+                    tracing::error!(
+                        "could not install the modifier event tap; Accessibility is probably \
+                         not granted. Retrying, so granting it takes effect without a restart."
+                    );
+                }
+                std::thread::sleep(Duration::from_secs(2));
+            } else {
+                reported_failure = false;
+            }
             }
         })
         .ok()?;
