@@ -102,10 +102,57 @@ impl MacosPermissions {
      * WHERE: Called by `check`.
      */
     fn accessibility_state() -> PermissionState {
-        // SAFETY: a simple boolean query into ApplicationServices, safe to call
-        // from any thread.
-        let trusted = unsafe { AXIsProcessTrusted() };
-        if trusted {
+        /*
+         * SOURCE OF TRUTH KEYWORDS: can_drive_the_keyboard, PostEvent,
+         *   ListenEvent, CGPreflightPostEventAccess
+         * WHAT:  Whether this process may actually post and observe keyboard
+         *        events — which is the only thing Murmur wants Accessibility
+         *        FOR: pasting with a synthetic Command-V, and watching for a
+         *        modifier tap.
+         * WHY:   `AXIsProcessTrusted` is the famous check and it is not the
+         *        precise one. macOS stores kTCCServicePostEvent and
+         *        kTCCServiceListenEvent as SEPARATE rows from
+         *        kTCCServiceAccessibility; the switch in System Settings
+         *        normally flips all three together, but they are queried
+         *        independently and can genuinely disagree — a reset, or a
+         *        partial grant, leaves one true and another false. Apple's own
+         *        developer-support guidance is to preflight the specific
+         *        capability rather than ask about Accessibility in general.
+         *
+         *        Asking the accurate question is also what makes this ONE
+         *        source of truth. The injector and the modifier tap both need
+         *        the keyboard; if this reported on a different row from the one
+         *        that gates them, the app could report "granted" and then do
+         *        nothing, which is precisely the failure this replaces.
+         *
+         *        AXIsProcessTrusted is still consulted, as a cross-check: when
+         *        the two disagree the log says so, because that disagreement is
+         *        the signature of a stale TCC row and is otherwise invisible.
+         */
+        // SAFETY: three parameterless boolean queries into system frameworks,
+        // all safe to call from any thread and none of which prompt.
+        let (trusted, can_post, can_listen) = unsafe {
+            (
+                AXIsProcessTrusted(),
+                CGPreflightPostEventAccess(),
+                CGPreflightListenEventAccess(),
+            )
+        };
+
+        if trusted != (can_post && can_listen) {
+            tracing::warn!(
+                ax_trusted = trusted,
+                can_post_events = can_post,
+                can_listen_to_events = can_listen,
+                "Accessibility and the keyboard grants disagree — usually a stale TCC row. \
+                 Remove Murmur from Privacy & Security > Accessibility with the minus button \
+                 and allow it again."
+            );
+        }
+
+        // Both, because we need both: posting is the paste, listening is the
+        // hotkey. Reporting granted while half of it is missing is the lie.
+        if can_post && can_listen {
             PermissionState::Granted
         } else {
             // Indistinguishable from "never asked" through this API, and that
@@ -169,9 +216,24 @@ impl PermissionProvider for MacosPermissions {
                     return Ok(PermissionState::NotDetermined);
                 }
 
-                // This is the ONE call that can show the Accessibility dialog,
-                // and only if it has never been shown for this bundle and
-                // signature. After a denial it silently does nothing.
+                /*
+                 * Ask for the two capabilities we actually use FIRST. They are
+                 * the rows that gate posting and observing keystrokes, and
+                 * asking for them directly is what puts a grant on the right
+                 * row rather than on a neighbouring one. Both prompt, and both
+                 * are no-ops once answered.
+                 */
+                // SAFETY: prompting variants of the queries above; they present
+                // system UI and return the resulting state.
+                let (posted, listened) =
+                    unsafe { (CGRequestPostEventAccess(), CGRequestListenEventAccess()) };
+                if posted && listened {
+                    return Ok(PermissionState::Granted);
+                }
+
+                // Falls through to the Accessibility dialog, which is the one
+                // that actually opens the pane for a user who has to go and
+                // find the switch.
                 let trusted = unsafe { prompt_for_accessibility() };
                 Ok(if trusted {
                     PermissionState::Granted
@@ -215,6 +277,27 @@ impl PermissionProvider for MacosPermissions {
 unsafe extern "C" {
     /// Non-prompting. Safe to call as often as we like.
     fn AXIsProcessTrusted() -> bool;
+}
+
+// SOURCE OF TRUTH KEYWORDS: CGPreflightPostEventAccess, CGRequestPostEventAccess
+// WHAT:  The precise questions: may this process SEND keyboard events, and may
+//        it WATCH them.
+// WHY:   These read kTCCServicePostEvent and kTCCServiceListenEvent, which are
+//        the rows that actually gate CGEventPost and CGEventTapCreate. The
+//        Accessibility switch normally sets all three together, so the
+//        distinction is invisible until something desynchronises them — and
+//        then an app checking only AXIsProcessTrusted reports a grant it does
+//        not have. The `Preflight` calls never prompt; the `Request` calls do.
+// WHERE: accessibility_state and request.
+//
+// A plain comment rather than a doc comment: rustdoc has nothing to attach one
+// to on an extern block, and clippy denies it.
+#[link(name = "CoreGraphics", kind = "framework")]
+unsafe extern "C" {
+    fn CGPreflightPostEventAccess() -> bool;
+    fn CGRequestPostEventAccess() -> bool;
+    fn CGPreflightListenEventAccess() -> bool;
+    fn CGRequestListenEventAccess() -> bool;
 }
 
 /**
