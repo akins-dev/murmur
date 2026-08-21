@@ -91,22 +91,15 @@ export function Dashboard() {
           already the floating glass object (docs/04 §8) — wrapping the rail in a
           second GlassPanel drew a surface on a surface and gave the eye two
           seams to resolve where the design has one object. */}
-      {/* THE RAIL'S DIVIDER STARTS BELOW THE HEADER BAND, and that is the fix
-          for the window controls looking "squeezed into the sidebar". macOS
-          draws the traffic lights at a fixed inset spanning roughly 20-72pt,
-          which is WIDER than the 56pt rail, so a full-height divider at 56pt
-          ran straight through the middle of the button cluster and made the
-          three of them read as something trying and failing to fit inside the
-          sidebar. Above the band there is now no seam at all: the top of the
-          window is one continuous surface across rail and content, which is
-          what a title bar looks like and what lets the lights simply sit in
-          it. */}
-      <div className="relative flex h-full shrink-0">
+      {/* NO DIVIDER. The rail used to carry a hairline down its right edge and
+          it is gone on purpose: the window's own vibrancy is already one
+          floating object, and a seam drawn across the middle of it invites the
+          eye to resolve two surfaces where the design has one. It was also what
+          made the traffic lights look squeezed — the lights span wider than the
+          rail, so any full-height line at the rail's edge cut through the
+          button cluster. Removing the line removes both problems at once. */}
+      <div className="flex h-full shrink-0">
         <Sidebar items={navItems} activeRoute={activeRoute} onSelect={(next) => navigateTo(next)} />
-        <span
-          aria-hidden="true"
-          className="hairline-r absolute top-[var(--page-header-height)] right-0 bottom-0 w-0"
-        />
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">

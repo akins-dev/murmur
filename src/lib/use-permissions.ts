@@ -19,7 +19,8 @@
  */
 
 import { useEffect } from "react";
-import { commands, type OsPermission, type PermissionReport } from "./bindings";
+import { commands, events, type OsPermission, type PermissionReport } from "./bindings";
+import { useTauriEvent } from "./use-event";
 import { useCommand, type CommandState } from "./ipc";
 
 /** The macOS pane names, so ours match what the user is about to look at. */
@@ -51,6 +52,23 @@ export function missingPermissions(
 
 export function usePermissions(): CommandState<PermissionReport[]> {
   const permissions = useCommand(commands.checkPermissions, []);
+
+  /**
+   * WHAT:  Rust pushes the grants whenever they actually change.
+   * WHY:   This is the load-bearing one, and the focus listener below is the
+   *        fallback rather than the mechanism. Murmur is an accessory app that
+   *        usually has NO window on screen while the user is in System
+   *        Settings, so there is frequently no focus event to hang a re-check
+   *        on — the app went on reporting "not granted" after it had been
+   *        granted, through relaunches, which is what the operator hit.
+   *        See bootstrap::watch_permissions.
+   */
+  useTauriEvent(events.permissionsChanged, () => {
+    // Re-asks rather than trusting the payload: the command is the one
+    // authority on this and it costs two local calls, so there is no reason to
+    // introduce a second path that could disagree with it.
+    permissions.reload();
+  });
 
   useEffect(() => {
     const onFocus = () => permissions.reload();

@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri_specta::Event;
 
+use crate::ipc::commands::system::PermissionReport;
 use crate::types::{AudioLevel, DeliveryKind, DownloadProgress, ModelId, ModelState, SessionState};
 
 /// The pill's entire input. Emitted on every transition.
@@ -45,6 +46,26 @@ pub struct SessionStateChanged {
 pub struct TranscriptDelivered {
     pub word_count: u32,
     pub delivery: DeliveryKind,
+}
+
+/**
+ * SOURCE OF TRUTH KEYWORDS: PermissionsChanged
+ * WHAT:  The OS grants, pushed whenever one of them actually changes.
+ * WHY:   A permission is granted in System Settings — a DIFFERENT app — and
+ *        nothing in our process is told. The UI used to re-check on window
+ *        focus, which is the obvious answer and is not enough: Murmur is an
+ *        accessory app that often has no window on screen at all when the
+ *        switch is flipped, and the operator reported the app never noticing
+ *        even after quitting and relaunching.
+ *
+ *        Pushing it means the moment the switch moves, every window that cares
+ *        is correct — no focus, no restart, no reopening a pane to "refresh"
+ *        it. That last part is what he was actually complaining about.
+ * WHERE: Emitted by the watcher in bootstrap; consumed by lib/use-permissions.
+ */
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
+pub struct PermissionsChanged {
+    pub reports: Vec<PermissionReport>,
 }
 
 /// Waveform data. High frequency, and droppable by design — a missed frame is

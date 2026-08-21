@@ -99,8 +99,14 @@
 
   /* ── Geometry (docs/04 §4) ────────────────────────────────────────── */
   --radius-pill: 18px;
-  --radius-panel: 28px;
-  --radius-card: 20px;
+  /* The WINDOW's corner radius — the whole app as one rounded object. Read by
+   * src-tauri so the native vibrancy is cut to the same shape; a CSS-only round
+   * here would leave the effect view's square corners poking out past it, which
+   * is the "huge square" bug in a new place. XL on purpose: the target is an
+   * Apple-widget feel rather than a document window. */
+  --radius-window: 26px;
+  --radius-panel: 32px;
+  --radius-card: 24px;
   --radius-input: 12px;
 
   --space-1: 4px;
@@ -259,22 +265,29 @@
   --waveform-input-gamma: 0.6;
 
   /* ── The page header and its scroll fades (docs/04 §8) ──────────────
-   * --page-header-height is the ALIGNED BAND: the row the page title sits in,
-   * and the row macOS draws its traffic lights into. It is --titlebar-height
-   * and must stay that way — the whole point is that the title and the three
-   * lights share one centre line, so the lights read as part of the header
-   * rather than floating over the content. The rail is only --rail-width (56px)
-   * and the lights span past it to roughly 66px, which is why they cannot be
-   * contained by the sidebar alone and why this band has to continue across
-   * the content pane.
+   * TWO NUMBERS, TWO JOBS, and merging them is what made the header look
+   * cramped. --traffic-light-band is ALIGNMENT: the 28px macOS title bar the
+   * three window buttons are centred in, and the row the page title sits in so
+   * the two share a centre line. --page-header-height is SPACE: how far down
+   * the page's content begins. They used to be the same value, which meant
+   * content started 10px under the title and the whole page read as stuck to
+   * the top of the window.
+   *
+   * Raising this one gives the title air beneath it and moves nothing else —
+   * the title stays locked to the lights because it is the BAND it aligns to,
+   * not this.
    *
    * --scroll-fade-size is how far content dissolves before it reaches an edge.
+   * 52px rather than 40: the operator asked for the fade to cave in "twenty to
+   * thirty percent more", and a deeper dissolve is what makes the edge read as
+   * the content receding rather than as a band drawn over it.
+   *
    * The fade is a MASK, not a gradient in a background colour: this window is
    * transparent with native vibrancy behind it, so a painted gradient would be
    * a grey slab sitting on the glass. A mask makes the content itself fade to
    * nothing, which is what the operator described and the only version that
    * survives a translucent background. */
-  --page-header-height: var(--titlebar-height);
+  --page-header-height: 52px;
 
   /* THE BAND macOS DRAWS THE TRAFFIC LIGHTS INTO, and the only thing the page
    * title is allowed to align itself to. The lights are placed by the system at
@@ -289,7 +302,7 @@
    * title still sits off the lights on device, THIS is the one number to
    * change. */
   --traffic-light-band: 28px;
-  --scroll-fade-size: 40px;
+  --scroll-fade-size: 52px;
 
   /* ── Dashboard (docs/04 §8) ───────────────────────────────────────── */
   --window-width: 960px;

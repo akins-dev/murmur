@@ -198,6 +198,7 @@ pub fn setup(app: &AppHandle) -> AppResult<()> {
 
     apply_window_vibrancy(app);
     crate::tray::adopt_pill_tokens(app);
+    watch_permissions(app);
     keep_windows_alive(app);
     report_permissions(&ports);
     start_retention_sweep(state.clone());
@@ -1097,6 +1098,81 @@ fn on_escape(app: &AppHandle) {
     });
 }
 
+
+/**
+ * SOURCE OF TRUTH KEYWORDS: watch_permissions, permissions_without_restart
+ * WHAT:  Watches the OS grants and pushes them to the windows when one changes.
+ * WHY:   Nothing tells an app that its permissions moved. The grant happens in
+ *        System Settings, which is a different process, and macOS sends no
+ *        notification — so an app either polls or stays wrong.
+ *
+ *        The UI used to re-check on window focus. That is the obvious answer
+ *        and it is not enough here: Murmur is an accessory app that usually has
+ *        NO window on screen when the switch is flipped, so there is no focus
+ *        event to hang it on. The operator's report was exactly this — grant it,
+ *        come back, and the app still says it is missing.
+ *
+ *        Polling is the honest mechanism rather than a workaround: both checks
+ *        are cheap local calls (AXIsProcessTrusted, and an AVFoundation status
+ *        read that does not touch the device), and there is no event to
+ *        subscribe to. It emits only on CHANGE, so a stable machine costs one
+ *        comparison a second and no IPC at all.
+ *
+ *        It keeps watching after everything is granted, at a slower cadence,
+ *        because a permission can be REVOKED while the app runs and an app that
+ *        only ever learns good news would go on believing it can paste.
+ * WHERE: Started once by setup.
+ */
+fn watch_permissions(app: &AppHandle) {
+    use crate::ipc::commands::system::PermissionReport;
+    use crate::ipc::events::PermissionsChanged;
+    use std::time::Duration;
+    use tauri_specta::Event as _;
+
+    /// While something is missing the user is probably in System Settings
+    /// right now, so the screen has to keep up with them.
+    const EAGER: Duration = Duration::from_millis(750);
+    /// Once everything is granted this is only watching for a revocation.
+    const RELAXED: Duration = Duration::from_secs(10);
+
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let mut last: Option<Vec<PermissionReport>> = None;
+
+        loop {
+            let Some(state) = app.try_state::<AppState>() else {
+                return;
+            };
+            let permissions = Arc::clone(&state.ports.permissions);
+
+            let reports: Vec<PermissionReport> =
+                [OsPermission::Microphone, OsPermission::Accessibility]
+                    .into_iter()
+                    .map(|permission| PermissionReport {
+                        permission,
+                        state: permissions.check(permission),
+                    })
+                    .collect();
+
+            let all_granted = reports.iter().all(|report| report.state.is_granted());
+
+            if last.as_deref() != Some(reports.as_slice()) {
+                if last.is_some() {
+                    // Only from the second reading on: the first is the startup
+                    // state, which report_permissions has already logged.
+                    tracing::info!(?reports, "an OS permission changed");
+                }
+                let _ = (PermissionsChanged {
+                    reports: reports.clone(),
+                })
+                .emit(&app);
+                last = Some(reports);
+            }
+
+            tokio::time::sleep(if all_granted { RELAXED } else { EAGER }).await;
+        }
+    });
+}
 
 #[cfg(test)]
 mod tests {

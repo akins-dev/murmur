@@ -19,7 +19,9 @@ use crate::ports::permissions::{OsPermission, PermissionState};
 use crate::registry::CapabilityKey;
 use crate::types::DeviceInfo;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, specta::Type)]
+// PartialEq so the permission watcher can emit only on CHANGE rather than
+// pushing an identical report every second. See bootstrap::watch_permissions.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, specta::Type)]
 pub struct PermissionReport {
     pub permission: OsPermission,
     pub state: PermissionState,

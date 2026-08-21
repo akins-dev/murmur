@@ -38,7 +38,7 @@ import {
 } from "@/lib/bindings";
 import { unwrapCommand, useCommand } from "@/lib/ipc";
 import { useTauriEvent } from "@/lib/use-event";
-import { ErrorSurface, GlassPanel } from "@/components/global";
+import { ErrorSurface } from "@/components/global";
 import { StepShell } from "./_components/StepShell";
 import { usePermissions } from "@/lib/use-permissions";
 import { PermissionStep } from "./_components/PermissionStep";
@@ -102,11 +102,15 @@ export function Onboarding() {
   const error = permissions.error ?? models.error ?? registry.error;
 
   return (
-    // "elevated", because the native material behind this window is Popover,
-    // and docs/04 §3 maps Popover to glass-elevated. The web tint has to name
-    // the same material the vibrancy is, or the two layers disagree and the
-    // window reads a shade heavier than every other surface in the app.
-    <GlassPanel material="elevated" radius="none" className="h-full">
+    // NO GLASS PANEL HERE. This window already HAS native Popover vibrancy
+    // behind it (bootstrap.rs applies it), and painting material-elevated on
+    // top was covering that vibrancy with a 72%-opaque surface — which is
+    // exactly why onboarding read as a solid sheet while the rest of the app
+    // read as glass. The dashboard has no wrapper for the same reason: when a
+    // window IS the surface, the web layer's job is to stay out of the way and
+    // let the native material through. The noise layer goes with it; at 3% over
+    // a surface that is now genuinely translucent it was texture on nothing.
+    <div className="h-full">
       <div data-tauri-drag-region className="h-[var(--titlebar-height)]" />
       {error ? (
         <ErrorSurface
@@ -160,6 +164,6 @@ export function Onboarding() {
           </>
         </StepShell>
       )}
-    </GlassPanel>
+    </div>
   );
 }

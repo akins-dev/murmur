@@ -63,6 +63,7 @@ export const events = {
 	modelDownloadProgress: makeEvent<ModelDownloadProgress>("model-download-progress"),
 	modelStateChanged: makeEvent<ModelStateChanged>("model-state-changed"),
 	onboardingProgress: makeEvent<OnboardingProgress>("onboarding-progress"),
+	permissionsChanged: makeEvent<PermissionsChanged>("permissions-changed"),
 	sessionStateChanged: makeEvent<SessionStateChanged>("session-state-changed"),
 	settingsChanged: makeEvent<SettingsChanged>("settings-changed"),
 	transcriptDelivered: makeEvent<TranscriptDelivered>("transcript-delivered"),
@@ -660,6 +661,27 @@ export type PermissionReport = {
 export type PermissionState = "GRANTED" | "DENIED" | 
 /**  Never asked. The one state in which `request` will show a dialog. */
 "NOT_DETERMINED";
+
+/**
+ * 
+ *  * SOURCE OF TRUTH KEYWORDS: PermissionsChanged
+ *  * WHAT:  The OS grants, pushed whenever one of them actually changes.
+ *  * WHY:   A permission is granted in System Settings — a DIFFERENT app — and
+ *  *        nothing in our process is told. The UI used to re-check on window
+ *  *        focus, which is the obvious answer and is not enough: Murmur is an
+ *  *        accessory app that often has no window on screen at all when the
+ *  *        switch is flipped, and the operator reported the app never noticing
+ *  *        even after quitting and relaunching.
+ *  *
+ *  *        Pushing it means the moment the switch moves, every window that cares
+ *  *        is correct — no focus, no restart, no reopening a pane to "refresh"
+ *  *        it. That last part is what he was actually complaining about.
+ *  * WHERE: Emitted by the watcher in bootstrap; consumed by lib/use-permissions.
+ *  
+ */
+export type PermissionsChanged = {
+	reports: PermissionReport[],
+};
 
 /**
  * 
