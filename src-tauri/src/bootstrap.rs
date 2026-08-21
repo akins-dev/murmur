@@ -215,6 +215,7 @@ pub fn setup(app: &AppHandle) -> AppResult<()> {
     tauri::async_runtime::spawn(actor.run(event_rx));
 
     apply_window_vibrancy(app);
+    let_the_pill_float_over_everything(app);
     crate::tray::adopt_pill_tokens(app);
     watch_permissions(app);
     attach_sidebar(app);
@@ -1118,6 +1119,79 @@ fn on_escape(app: &AppHandle) {
     });
 }
 
+
+/**
+ * SOURCE OF TRUTH KEYWORDS: let_the_pill_float_over_everything, spaces,
+ *   canJoinAllSpaces, fullScreenAuxiliary, collection_behaviour
+ * WHAT:  Makes the pill visible over full-screen apps and on every Space.
+ * WHY:   `alwaysOnTop` sets a window LEVEL, which orders windows within a
+ *        Space and says nothing about which Spaces a window belongs to. A
+ *        full-screen app gets a Space of its own, and by default our pill is
+ *        not in it — so dictating into a full-screen editor showed no pill at
+ *        all, while swiping back to the desktop revealed it sitting there
+ *        faithfully over nothing.
+ *
+ *        That is a serious failure for this product specifically: the pill is
+ *        the ONLY feedback that recording started, the app has no other window
+ *        on screen, and full screen is exactly where someone writing prose
+ *        works. Silence there reads as the hotkey not firing.
+ *
+ *        Three behaviours, each load-bearing:
+ *          canJoinAllSpaces     — belong to every Space, including a
+ *                                 full-screen app's own.
+ *          fullScreenAuxiliary  — allowed to sit ABOVE full-screen content
+ *                                 rather than being pushed behind it.
+ *          stationary           — do not slide with the Spaces swipe
+ *                                 animation, which would smear a floating
+ *                                 indicator across the transition.
+ *
+ *        The level is raised to the status-item level as well, which is where
+ *        menu-bar overlays live — floating is enough within a Space and is not
+ *        reliably above full-screen content.
+ *
+ *        Deliberately only the pill. The dashboard and onboarding are ordinary
+ *        windows and should follow ordinary Space rules; a settings window that
+ *        followed you into every full-screen app would be an intrusion.
+ * WHERE: Called once by setup, after the windows exist.
+ */
+fn let_the_pill_float_over_everything(app: &AppHandle) {
+    #[cfg(target_os = "macos")]
+    {
+        use objc2::rc::Retained;
+        use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+
+        let Some(pill) = app.get_webview_window(PILL_WINDOW) else {
+            return;
+        };
+        let Ok(handle) = pill.ns_window() else {
+            return;
+        };
+
+        // SAFETY: the handle is Tauri's NSWindow for a window that exists, and
+        // this runs on the main thread during setup.
+        unsafe {
+            let Some(window) = Retained::retain(handle as *mut NSWindow) else {
+                return;
+            };
+
+            window.setCollectionBehavior(
+                NSWindowCollectionBehavior::CanJoinAllSpaces
+                    | NSWindowCollectionBehavior::FullScreenAuxiliary
+                    | NSWindowCollectionBehavior::Stationary
+                    | NSWindowCollectionBehavior::IgnoresCycle,
+            );
+
+            // NSStatusWindowLevel. Named by value because objc2-app-kit does
+            // not re-export the constant; 25 is the level menu-bar extras use.
+            window.setLevel(25);
+        }
+
+        tracing::info!("the pill will follow the user into full-screen apps");
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    let _ = app;
+}
 
 /**
  * SOURCE OF TRUTH KEYWORDS: watch_permissions, permissions_without_restart
