@@ -105,6 +105,42 @@ jobs:
         working-directory: src-tauri
         run: cargo clippy --all-targets -- -D warnings
 
+      # Apple's variables are exported HERE, conditionally, rather than being
+      # listed in the build step's `env:` — and the difference is not cosmetic.
+      #
+      # A workflow `env:` entry fed by a missing secret is not absent, it is
+      # the EMPTY STRING, and Tauri treats "set" as "use it": it ran
+      # `security import` against an empty certificate and the whole release
+      # failed with "failed to import keychain certificate". The comment beside
+      # those lines claimed "Tauri skips both when they are empty". It does not,
+      # and nobody had run a release to find out.
+      #
+      # Exporting through $GITHUB_ENV only when a value is non-empty makes the
+      # variables genuinely ABSENT until the secrets exist, which is what the
+      # original comment promised. Adding the secrets is still the entire
+      # change — it just works now.
+      - name: Enable Apple signing and notarization when configured
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY \
+                      APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            value="${!name}"
+            if [ -n "$value" ]; then
+              printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
+              echo "$name is configured"
+            fi
+          done
+          if [ -z "${APPLE_SIGNING_IDENTITY}" ]; then
+            echo "::warning::No Apple Developer ID configured — this build is UNSIGNED." \
+                 "macOS will warn on first open until the certificate secrets are added."
+          fi
+
       - name: Build, sign and publish
         uses: tauri-apps/tauri-action@v0
         env:
@@ -121,17 +157,7 @@ jobs:
           # An empty value here is DELIBERATE — do not "tidy it up".
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
 
-          # ── Apple code signing and notarization.
-          # Empty until the secrets exist, and Tauri skips both when they are
-          # empty. Adding the secrets is the entire change — see the WHY above.
-          # Code signing:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          # Notarization:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Apple's variables are NOT listed here — see the step above.
 
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
