@@ -128,8 +128,11 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY \
-                      APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+          # APPLE_CERTIFICATE is handled entirely by the trust step above and
+          # must not reach Tauri, or it imports the certificate a second time
+          # into a keychain that has no trust settings — which is the failure
+          # this whole arrangement exists to avoid.
+          for name in APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
             value="${!name}"
             if [ -n "$value" ]; then
               printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
@@ -140,6 +143,46 @@ jobs:
             echo "::warning::No Apple Developer ID configured — this build is UNSIGNED." \
                  "macOS will warn on first open until the certificate secrets are added."
           fi
+
+      # Tauri resolves a signing identity with `security find-identity -v`,
+      # and `-v` means VALID — which excludes a self-signed certificate, since
+      # it chains to no trusted root. That is why an earlier run died with
+      # "failed to resolve signing identity" despite the certificate importing
+      # fine. Marking it trusted on the runner fixes it, and is safe HERE in a
+      # way it would not be on a person's machine: this keychain and this
+      # runner are destroyed when the job ends.
+      #
+      # The certificate must stay the same one forever. macOS keys an
+      # Accessibility grant to the certificate that signed the app, so a new
+      # certificate silently voids every existing user's permission.
+      - name: Trust the signing certificate on this runner
+        if: ${{ secrets.APPLE_CERTIFICATE != '' }}
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KC=build.keychain
+          KCPASS=$(uuidgen)
+          security create-keychain -p "$KCPASS" "$KC"
+          security set-keychain-settings "$KC"          # never auto-lock
+          security unlock-keychain -p "$KCPASS" "$KC"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > /tmp/cert.p12
+          security import /tmp/cert.p12 -k "$KC" -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign -A
+          # Without this, codesign fails with errSecInternalComponent even on an
+          # unlocked keychain. -T alone is not enough on modern macOS.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KCPASS" "$KC" >/dev/null
+          # Export the public certificate and trust it for code signing.
+          openssl pkcs12 -in /tmp/cert.p12 -clcerts -nokeys -legacy \
+            -passin pass:"$APPLE_CERTIFICATE_PASSWORD" -out /tmp/cert.pem 2>/dev/null
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign \
+            -k /Library/Keychains/System.keychain /tmp/cert.pem
+          security list-keychains -d user -s "$KC" login.keychain
+          rm -f /tmp/cert.p12 /tmp/cert.pem
+          echo "identities available to codesign:"
+          security find-identity -v -p codesigning "$KC"
 
       - name: Build, sign and publish
         uses: tauri-apps/tauri-action@v0
@@ -157,7 +200,9 @@ jobs:
           # An empty value here is DELIBERATE — do not "tidy it up".
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
 
-          # Apple's variables are NOT listed here — see the step above.
+          # APPLE_CERTIFICATE is deliberately absent: the step above already
+          # imported and trusted it, and letting Tauri import it a second time
+          # creates a second keychain without the trust settings.
 
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:

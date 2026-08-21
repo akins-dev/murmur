@@ -337,6 +337,38 @@ mod tests {
      */
     static PASTEBOARD_LOCK: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
 
+    /**
+     * SOURCE OF TRUTH KEYWORDS: PreservedClipboard, do_not_clobber_the_user
+     * WHAT:  Saves whatever is on the system clipboard and puts it back when
+     *        the test finishes.
+     * WHY:   These tests write to the REAL pasteboard, because that is the
+     *        thing being tested — a fake one would prove nothing about the
+     *        adapter. But the pasteboard belongs to whoever is using the
+     *        machine, and `cargo test` left "clipboard only, please" sitting in
+     *        it. The operator pasted our test fixture into a message to us,
+     *        which is how we found out.
+     *
+     *        A test may use a shared machine resource. It may not keep it.
+     * WHERE: Held by every test that writes the pasteboard.
+     */
+    struct PreservedClipboard(Option<String>);
+
+    impl PreservedClipboard {
+        fn save() -> Self {
+            Self(Clipboard::new().ok().and_then(|mut c| c.get_text().ok()))
+        }
+    }
+
+    impl Drop for PreservedClipboard {
+        fn drop(&mut self) {
+            // Restored on unwind too, so a FAILING test does not also cost the
+            // user their clipboard.
+            if let (Some(text), Ok(mut clipboard)) = (self.0.take(), Clipboard::new()) {
+                let _ = clipboard.set_text(text);
+            }
+        }
+    }
+
     /// Records whether `request` was reached, which is the whole point of the
     /// regression test below — the old code never called it.
     struct FakePermissions {
@@ -419,6 +451,7 @@ mod tests {
     #[test]
     fn delivering_without_a_decision_asks_for_accessibility() -> AppResult<()> {
         let _guard = PASTEBOARD_LOCK.lock();
+        let _clipboard = PreservedClipboard::save();
         if secure_input_would_mask_this_test() {
             return Ok(());
         }
@@ -464,6 +497,7 @@ mod tests {
     #[test]
     fn turning_auto_paste_off_stops_the_paste_and_asks_for_nothing() -> AppResult<()> {
         let _guard = PASTEBOARD_LOCK.lock();
+        let _clipboard = PreservedClipboard::save();
         if secure_input_would_mask_this_test() {
             return Ok(());
         }
@@ -587,6 +621,7 @@ mod tests {
     #[test]
     fn without_accessibility_delivery_degrades_instead_of_failing() -> AppResult<()> {
         let _guard = PASTEBOARD_LOCK.lock();
+        let _clipboard = PreservedClipboard::save();
         let injector = MacosInjector::new(FakePermissions::new(PermissionState::Denied));
         assert!(!injector.can_inject());
 
@@ -610,6 +645,7 @@ mod tests {
     #[test]
     fn the_text_reaches_the_clipboard_even_when_pasting_is_impossible() -> AppResult<()> {
         let _guard = PASTEBOARD_LOCK.lock();
+        let _clipboard = PreservedClipboard::save();
         let injector = MacosInjector::new(FakePermissions::new(PermissionState::Denied));
         let text = "murmur clipboard fallback check";
 
