@@ -2,7 +2,8 @@
  * SOURCE OF TRUTH KEYWORDS: Onboarding, OnboardingStep, usePermissions,
  *   checkPermissions, listModels, modelStateChanged, defaultModel, StepShell
  * WHAT:  The first-run flow: a three-slide tour of what the app does, then
- *        permissions, then the model, then a real hotkey test.
+ *        permissions, then the model, then a real hotkey test, and finally an
+ *        invitation that asks for nothing.
  * WHY:   The tour comes first because the operator asked for the app to teach
  *        before it asks: a permission dialog is a strange first thing to meet,
  *        and someone who has been shown what the app does has a reason to grant
@@ -45,6 +46,7 @@ import { PermissionStep } from "./_components/PermissionStep";
 import { ModelStep } from "./_components/ModelStep";
 import { HotkeyStep } from "./_components/HotkeyStep";
 import { TourStep } from "./_components/TourStep";
+import { InviteStep } from "./_components/InviteStep";
 
 /** Declared by the Onboarding capability in the registry. Named here because
  *  "which setting means first run is over" is a contract between the two
@@ -67,6 +69,9 @@ export function Onboarding() {
   // one genuinely local step in this flow. See TourStep.
   const [toured, setToured] = useState(false);
   const [tested, setTested] = useState(false);
+  /** The invitation is the last screen, after every step that asks for
+   *  something. Local, like the tour: there is no backend state behind it. */
+  const [invited, setInvited] = useState(false);
   const [finishError, setFinishError] = useState<AppError | null>(null);
   const [liveStates, setLiveStates] = useState<Readonly<Record<string, ModelState>>>({});
 
@@ -121,6 +126,8 @@ export function Onboarding() {
             registry.reload();
           }}
         />
+      ) : invited ? (
+        <InviteStep onFinish={finish} finishError={finishError} />
       ) : !toured ? (
         <TourStep hotkey={hotkey} onDone={() => setToured(true)} />
       ) : !micGranted ? (
@@ -145,12 +152,12 @@ export function Onboarding() {
             tested ? (
               <button
                 type="button"
-                onClick={finish}
-                // The app's one primary action, so it is the one inverted fill:
-                // solid --text-primary with the surface colour as its label. A
-                // monochrome primary still outweighs every secondary on screen,
-                // and it does it with contrast rather than with a hue the palette
-                // reserves for a live session (docs/04 §1.3).
+                onClick={() => setInvited(true)}
+                // Advances to the invitation rather than closing: setup is
+                // finished here, but there is one screen left that asks for
+                // nothing. The inverted fill is the app's one primary style
+                // (docs/04 §1.3) — monochrome, outweighing every secondary by
+                // contrast rather than by a hue the palette does not have.
                 className="h-[var(--control-height)] rounded-input bg-text-primary px-4 text-body font-medium text-opaque-elevated transition-opacity hover:opacity-90"
               >
                 Start using Murmur
@@ -158,10 +165,7 @@ export function Onboarding() {
             ) : null
           }
         >
-          <>
-            <HotkeyStep hotkey={hotkey} onDelivered={() => setTested(true)} />
-            {finishError ? <ErrorSurface size="compact" error={finishError} onRetry={finish} /> : null}
-          </>
+          <HotkeyStep hotkey={hotkey} onDelivered={() => setTested(true)} />
         </StepShell>
       )}
     </div>
