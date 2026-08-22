@@ -105,39 +105,3 @@ One file, one responsibility. Over ~400 lines means it is doing two things — s
 Never skip a feature or leave it incomplete. If pieces are missing — because you forgot them or because the user never mentioned them — either finish them or tell the user about those outliers.
 
 Don't use git unless told.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Hey, this is a quick test to show everybody how this app works. I just want to show you the speed and the responsiveness of using Murmur.
-
-سلام عليكم خيف فعلك.
-Très bien.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
