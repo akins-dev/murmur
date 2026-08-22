@@ -35,3 +35,6 @@ src-tauri/target/
 # Whisper models are hundreds of megabytes and are downloaded on first run,
 # never committed. See adapters/http_models.
 *.bin
+
+# The bundled model. 547MB, downloaded by the build, never committed.
+src-tauri/resources/models/

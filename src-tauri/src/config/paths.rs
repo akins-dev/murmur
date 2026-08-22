@@ -36,6 +36,23 @@ pub struct AppPaths {
     pub audio_dir: PathBuf,
     /// The single SQLite file.
     pub db_path: PathBuf,
+    /**
+     * SOURCE OF TRUTH KEYWORDS: bundled_models_dir, one_download
+     * WHAT:  Models shipped INSIDE the app bundle, if any.
+     * WHY:   Murmur is distributed as a single download that works the moment
+     *        it opens — no second wait, no first-run fetch, nothing to go wrong
+     *        on a bad connection. The weights ride along in Contents/Resources
+     *        and are used from there, read-only, rather than being copied into
+     *        Application Support: a copy would mean 547MB written on first
+     *        launch and 1.1GB on disk for one model.
+     *
+     *        `None` when nothing was bundled, which is the developer build and
+     *        the path where a model is still downloaded on demand. Both work;
+     *        only the first is what a user receives.
+     * WHERE: Set by bootstrap from Tauri's resource directory; consulted by
+     *        model_file.
+     */
+    pub bundled_models_dir: Option<PathBuf>,
 }
 
 impl AppPaths {
@@ -61,6 +78,7 @@ impl AppPaths {
             audio_dir: data_dir.join("audio"),
             db_path: data_dir.join("murmur.db"),
             data_dir,
+            bundled_models_dir: None,
         };
 
         paths.ensure_dirs()?;
@@ -81,9 +99,40 @@ impl AppPaths {
         Ok(())
     }
 
-    /// Where a model file with this id belongs.
+    /**
+     * WHAT:  Where a model file with this id belongs.
+     * WHY:   A model shipped inside the app wins, and everything downstream
+     *        gets it for free — the store sees the file already present so it
+     *        never downloads, the engine loads it from there, and the
+     *        onboarding step that waits for a download completes immediately.
+     *        Putting the choice HERE rather than in the store is what makes
+     *        that true: every caller already asks this one function where a
+     *        model is.
+     *
+     *        Falls through to Application Support when nothing is bundled, or
+     *        when the user has downloaded a model the bundle does not carry.
+     */
     pub fn model_file(&self, model_id: &str) -> PathBuf {
+        if let Some(bundled) = &self.bundled_models_dir {
+            let shipped = bundled.join(format!("ggml-{model_id}.bin"));
+            if shipped.is_file() {
+                return shipped;
+            }
+        }
         self.models_dir.join(format!("ggml-{model_id}.bin"))
+    }
+
+    /**
+     * WHAT:  Points the paths at models shipped inside the app bundle.
+     * WHY:   Takes a plain PathBuf rather than anything Tauri-shaped, so this
+     *        layer stays free of the framework above it. bootstrap knows where
+     *        the resources are; this file only needs to know that they exist.
+     */
+    pub fn with_bundled_models(mut self, dir: PathBuf) -> Self {
+        if dir.is_dir() {
+            self.bundled_models_dir = Some(dir);
+        }
+        self
     }
 
     /**
@@ -177,6 +226,7 @@ mod tests {
         let paths = AppPaths {
             data_dir: PathBuf::from("/tmp/murmur"),
             models_dir: PathBuf::from("/tmp/murmur/models"),
+            bundled_models_dir: None,
             logs_dir: PathBuf::from("/tmp/murmur/logs"),
             audio_dir: PathBuf::from("/tmp/murmur/audio"),
             db_path: PathBuf::from("/tmp/murmur/murmur.db"),

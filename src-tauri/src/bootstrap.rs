@@ -174,7 +174,27 @@ pub const ONBOARDING_WINDOW: &str = "onboarding";
  * WHERE: Called from the Tauri builder's setup hook.
  */
 pub fn setup(app: &AppHandle) -> AppResult<()> {
-    let paths = AppPaths::resolve()?;
+    /*
+     * SOURCE OF TRUTH KEYWORDS: bundled_model, single_download
+     * The model ships inside the app, so point the paths at it before anything
+     * asks where a model is. Everything downstream then behaves as though the
+     * user had already downloaded it: the store finds it present and skips the
+     * fetch, the engine loads it from Resources, and onboarding's download step
+     * completes at once. A user opens the app and dictates — no second wait and
+     * nothing to fail on a poor connection.
+     */
+    let paths = AppPaths::resolve()?.with_bundled_models(
+        app.path()
+            .resource_dir()
+            // Tauri keeps the glob's own directory structure under Resources,
+            // so a resource declared as `resources/models/*.bin` lands at
+            // Contents/Resources/resources/models — not at .../models. Getting
+            // this wrong is silent: the lookup misses, the store decides the
+            // model is absent, and the app downloads 547MB it is already
+            // carrying.
+            .map(|dir| dir.join("resources").join("models"))
+            .unwrap_or_default(),
+    );
     let db = Database::open(&paths.db_path)?;
 
     // A registry that contradicts itself is a wiring bug, and it is far better
