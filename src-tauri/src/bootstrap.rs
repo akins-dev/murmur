@@ -25,7 +25,10 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 
 use crate::adapters;
 use crate::adapters::cpal::CpalAudioSource;
+#[cfg(target_os = "macos")]
 use crate::adapters::macos::{MacosInjector, MacosPermissions};
+#[cfg(target_os = "windows")]
+use crate::adapters::windows::{WindowsInjector, WindowsPermissions};
 use crate::adapters::rules::RuleEnhancer;
 use crate::config::AppPaths;
 use crate::db::Database;
@@ -121,43 +124,37 @@ fn keep_windows_alive(app: &AppHandle) {
  * WHERE: Called once per window during setup.
  */
 fn apply_window_vibrancy(app: &AppHandle) {
-    use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
+    #[cfg(target_os = "macos")]
+    {
+        use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
 
-    // The radius is what makes the glass the PILL's shape rather than the
-    // window's. Without it the effect view is a rectangle filling the whole
-    // window — which is exactly the "huge square" behind the pill. The two full
-    // windows take None because for them the window IS the surface.
-    // Every window gets a radius, and the two full windows get one for the same
-    // reason the pill does. They are `transparent` with `titleBarStyle: Overlay`,
-    // so macOS paints no background of its own — the NSVisualEffectView IS the
-    // visible window. Leaving it square meant the app had system-radius corners
-    // (about 10pt) no matter what the design asked for, and rounding the WEB
-    // layer instead would have put square glass corners outside a rounded page:
-    // the pill's "huge square" bug relocated.
-    //
-    // Native traffic lights are unaffected. `decorations: false` would have got
-    // the same corners at the cost of drawing our own window buttons, and
-    // hand-made controls that feel subtly un-Mac are exactly what this app
-    // cannot afford.
-    let window_radius = crate::tray::design_token("--radius-window");
-    for (label, material, radius) in [
-        (PILL_WINDOW, NSVisualEffectMaterial::HudWindow, Some(crate::tray::pill_radius())),
-        // The rail is its own floating object, so it carries the window radius
-        // rather than the pill's. Sidebar material to match the dashboard it
-        // hangs beside.
-        (SIDEBAR_WINDOW, NSVisualEffectMaterial::Sidebar, Some(window_radius)),
-        (DASHBOARD_WINDOW, NSVisualEffectMaterial::Sidebar, Some(window_radius)),
-        (ONBOARDING_WINDOW, NSVisualEffectMaterial::Popover, Some(window_radius)),
-    ] {
-        let Some(window) = app.get_webview_window(label) else {
-            continue;
-        };
-        // Active state: the material keeps its blur even when the app is not
-        // frontmost. An accessory app is rarely frontmost, and a pill that goes
-        // flat grey the moment you click elsewhere would look broken.
-        match apply_vibrancy(&window, material, Some(NSVisualEffectState::Active), radius) {
-            Ok(()) => tracing::debug!(window = label, "vibrancy applied"),
-            Err(err) => tracing::warn!(window = label, error = %err, "could not apply vibrancy"),
+        let window_radius = crate::tray::design_token("--radius-window");
+        for (label, material, radius) in [
+            (PILL_WINDOW, NSVisualEffectMaterial::HudWindow, Some(crate::tray::pill_radius())),
+            (SIDEBAR_WINDOW, NSVisualEffectMaterial::Sidebar, Some(window_radius)),
+            (DASHBOARD_WINDOW, NSVisualEffectMaterial::Sidebar, Some(window_radius)),
+            (ONBOARDING_WINDOW, NSVisualEffectMaterial::Popover, Some(window_radius)),
+        ] {
+            let Some(window) = app.get_webview_window(label) else {
+                continue;
+            };
+            match apply_vibrancy(&window, material, Some(NSVisualEffectState::Active), radius) {
+                Ok(()) => tracing::debug!(window = label, "vibrancy applied"),
+                Err(err) => tracing::warn!(window = label, error = %err, "could not apply vibrancy"),
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        use window_vibrancy::{apply_acrylic, apply_mica};
+        for label in [DASHBOARD_WINDOW, ONBOARDING_WINDOW, SIDEBAR_WINDOW] {
+            if let Some(window) = app.get_webview_window(label) {
+                let _ = apply_mica(&window, None);
+            }
+        }
+        if let Some(pill) = app.get_webview_window(PILL_WINDOW) {
+            let _ = apply_acrylic(&pill, Some((20, 20, 25, 200)));
         }
     }
 }
@@ -212,7 +209,7 @@ pub fn setup(app: &AppHandle) -> AppResult<()> {
     // is only meaningful while no session can yet exist.
     recover_orphans(&db);
 
-    let ports = build_ports(app, &paths)?;
+    let ports = build_ports(app, &paths, &db)?;
     let settings = SessionSettings::load(&db);
 
     // The channel is created before AppState so the handle can go into it, and
@@ -264,7 +261,7 @@ pub fn setup(app: &AppHandle) -> AppResult<()> {
         app,
         Arc::clone(&ports.engine),
         Arc::clone(&ports.models),
-        default_model_id(),
+        active_model_id(&db),
     );
     show_first_window(app, &db)?;
     show_dashboard_on_launch(app);
@@ -281,13 +278,13 @@ pub fn setup(app: &AppHandle) -> AppResult<()> {
  *        would show nothing at all until it finished.
  * WHERE: Called once by setup.
  */
-fn build_ports(app: &AppHandle, paths: &AppPaths) -> AppResult<Ports> {
+fn build_ports(app: &AppHandle, paths: &AppPaths, db: &Database) -> AppResult<Ports> {
     let events: Arc<dyn crate::ports::EventSink> =
         Arc::new(adapters::TauriEventSink::new(app.clone()));
 
     let models = adapters::build_model_store(paths.clone(), Arc::clone(&events))?;
 
-    let model_id = default_model_id();
+    let model_id = active_model_id(db);
     let engine = adapters::build_engine(
         &adapters::default_engine_id(),
         paths.model_file(model_id.as_str()),
@@ -297,22 +294,40 @@ fn build_ports(app: &AppHandle, paths: &AppPaths) -> AppResult<Ports> {
         engine,
         audio: Arc::new(CpalAudioSource::new()),
         enhancer: Arc::new(RuleEnhancer::new()),
+        #[cfg(target_os = "macos")]
         injector: Arc::new(MacosInjector::new(MacosPermissions::new())),
+        #[cfg(target_os = "windows")]
+        injector: Arc::new(WindowsInjector::new()),
         models,
+        #[cfg(target_os = "macos")]
         permissions: Arc::new(MacosPermissions::new()),
+        #[cfg(target_os = "windows")]
+        permissions: Arc::new(WindowsPermissions::new()),
         events,
     })
 }
 
-fn default_model_id() -> crate::types::ModelId {
-    let id = registry::setting_def(keys::TRANSCRIPTION_MODEL)
-        .and_then(|def| match &def.default {
-            SettingValue::Choice(value) => Some(value.clone()),
+fn active_model_id(db: &Database) -> crate::types::ModelId {
+    let from_db = services::settings::get_setting(db, keys::TRANSCRIPTION_MODEL)
+        .ok()
+        .flatten()
+        .and_then(|val| match val {
+            SettingValue::Choice(id) => Some(id),
             _ => None,
+        });
+
+    let id = from_db
+        .or_else(|| {
+            registry::setting_def(keys::TRANSCRIPTION_MODEL).and_then(|def| match &def.default {
+                SettingValue::Choice(value) => Some(value.clone()),
+                _ => None,
+            })
         })
-        .unwrap_or_else(|| "large-v3-turbo-q5_0".to_string());
+        .unwrap_or_else(|| "small-q5_1".to_string());
     crate::types::ModelId(id)
 }
+
+
 
 /**
  * SOURCE OF TRUTH KEYWORDS: worth_warming
@@ -658,13 +673,15 @@ static DICTATION_SHORTCUT: parking_lot::Mutex<Option<Shortcut>> = parking_lot::M
  *        is currently active, and after the settings write the database can no
  *        longer say which that was.
  */
+#[cfg(target_os = "macos")]
 static MODIFIER_TAP: parking_lot::Mutex<Option<crate::adapters::macos::ModifierTap>> =
     parking_lot::Mutex::new(None);
 
 /// Stops whichever mechanism is currently registered. Idempotent.
 fn release_dictation_binding(app: &AppHandle) {
     // Dropping the tap stops its thread.
-    *MODIFIER_TAP.lock() = None;
+    #[cfg(target_os = "macos")]
+    { *MODIFIER_TAP.lock() = None; }
 
     if let Some(previous) = DICTATION_SHORTCUT.lock().take() {
         let manager = app.global_shortcut();
@@ -685,14 +702,10 @@ fn release_dictation_binding(app: &AppHandle) {
  * WHERE: register_hotkeys at launch, and rebind_dictation_hotkey after a write.
  */
 fn bind_dictation(app: &AppHandle, binding: &HotkeyBinding) -> AppResult<()> {
+    #[cfg(target_os = "macos")]
     if let Some(modifier) = binding.sole_modifier() {
         let handler_app = app.clone();
         let tap = crate::adapters::macos::watch_modifier_tap(modifier, move || {
-            // The tap has no notion of press and release — a double-tap is a
-            // single gesture — so it always reports a Pressed edge and the
-            // toggle logic in on_dictation_hotkey does the rest. Push-to-talk
-            // is meaningless for a modifier and is documented as such in the
-            // recording-mode setting.
             on_dictation_hotkey(&handler_app, ShortcutState::Pressed);
         });
 
@@ -708,6 +721,11 @@ fn bind_dictation(app: &AppHandle, binding: &HotkeyBinding) -> AppResult<()> {
             )
             .recoverable()),
         };
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    if binding.sole_modifier().is_some() {
+        tracing::warn!("Modifier-only hotkey is not supported on this platform; please bind a key combination like Alt+Space");
     }
 
     let shortcut = to_shortcut(binding)?;
@@ -1648,7 +1666,10 @@ mod tests {
     #[test]
     fn constructors_do_not_need_an_async_runtime() {
         use crate::adapters::cpal::CpalAudioSource;
-        use crate::adapters::macos::{MacosInjector, MacosPermissions};
+        #[cfg(target_os = "macos")]
+use crate::adapters::macos::{MacosInjector, MacosPermissions};
+#[cfg(target_os = "windows")]
+use crate::adapters::windows::{WindowsInjector, WindowsPermissions};
         use crate::adapters::rules::RuleEnhancer;
         use crate::pipeline::Chunker;
         use crate::session::SessionSettings;
@@ -1656,8 +1677,14 @@ mod tests {
         // Ports.
         let _audio = CpalAudioSource::new();
         let _enhancer = RuleEnhancer::new();
+        #[cfg(target_os = "macos")]
         let _permissions = MacosPermissions::new();
+        #[cfg(target_os = "macos")]
         let _injector = MacosInjector::new(MacosPermissions::new());
+        #[cfg(target_os = "windows")]
+        let _permissions = WindowsPermissions::new();
+        #[cfg(target_os = "windows")]
+        let _injector = WindowsInjector::new();
 
         // Pipeline and session pieces.
         let _chunker = Chunker::new();

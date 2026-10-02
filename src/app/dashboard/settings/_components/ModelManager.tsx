@@ -39,7 +39,7 @@ const STATE_LABEL: Readonly<Record<ModelState["kind"], string>> = {
   NOT_DOWNLOADED: "Not downloaded",
   DOWNLOADING: "Downloading",
   VERIFYING: "Verifying",
-  OPTIMIZING: "Optimising for the Neural Engine — 15 to 60 seconds, once",
+  OPTIMIZING: "Optimising the model — 15 to 60 seconds, once",
   READY: "Ready",
   FAILED: "Failed",
 };

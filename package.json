@@ -42,5 +42,5 @@
     "vite": "^7.0.4"
   },
   "license": "MIT",
-  "description": "Local-first, free, blazing-fast speech-to-text for macOS."
+  "description": "Local-first, free, blazing-fast speech-to-text for Windows."
 }

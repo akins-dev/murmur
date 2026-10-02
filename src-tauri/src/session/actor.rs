@@ -693,7 +693,7 @@ impl SessionActor {
         // Audible confirmation. Murmur has no window at the moment the hotkey
         // fires, so for that instant this is the ONLY feedback that it worked.
         if self.settings.audio_feedback {
-            use crate::adapters::macos::{play_feedback, FeedbackSound};
+            use crate::adapters::{play_feedback, FeedbackSound};
             match &state {
                 SessionState::Recording { elapsed_ms: 0 } => play_feedback(FeedbackSound::Start),
                 /*

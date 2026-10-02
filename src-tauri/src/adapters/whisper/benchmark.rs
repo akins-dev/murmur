@@ -28,9 +28,14 @@ use super::params::{build_full_params, DecodeProfile};
 
 /// Long enough for the encoder pass to dominate the measurement and short
 /// enough that startup does not visibly stall.
+#[cfg(target_os = "windows")]
+pub const PROBE_SECONDS: f32 = 1.0;
+#[cfg(not(target_os = "windows"))]
 pub const PROBE_SECONDS: f32 = 10.0;
-/// A throwaway pass whose only job is to trigger the Core ML compile and the
-/// first Metal allocation, so neither lands inside the timed run.
+
+#[cfg(target_os = "windows")]
+pub const WARMUP_SECONDS: f32 = 0.5;
+#[cfg(not(target_os = "windows"))]
 pub const WARMUP_SECONDS: f32 = 1.0;
 
 /**

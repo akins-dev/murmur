@@ -106,7 +106,7 @@ export function AppProfiles({ defs, globals, dynamic, engine, permissions }: App
           value={bundleId}
           list={listId}
           onChange={(event) => setBundleId(event.target.value)}
-          placeholder="Application bundle id, e.g. com.apple.Terminal"
+          placeholder="Application identifier, e.g. com.apple.Terminal or notepad.exe"
           className={`${FIELD_CLASS} flex-1`}
         />
         <datalist id={listId}>

@@ -5,36 +5,22 @@ description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
-# The `_lib` suffix may seem redundant but it is necessary
-# to make the lib name unique and wouldn't conflict with the bin name.
-# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "murmur_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
-# SOURCE OF TRUTH KEYWORDS: doctest, sot_headers
-# The SOT headers are a navigation index, not API documentation, and they are
-# not Rust. Their WHY:/WHERE: continuation lines sit several spaces in once the
-# leading `*` is stripped, which rustdoc reads as an indented code block and
-# tries to compile — so `cargo test` failed on 79 "doctests" that were only ever
-# prose. `cargo test --lib` was green, which is how it went unnoticed: the
-# command everyone ran passed while the plain one did not.
 doctest = false
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
-# Core ML is an ENHANCEMENT, never a requirement: whisper.cpp falls back to
-# Metal on its own when the .mlmodelc encoder is absent, and the first load of
-# a Core ML model on a machine costs a 15-60s Neural Engine compile. Off by
-# default so a plain `cargo build` is the fast, predictable path.
 [features]
 default = []
 coreml = ["whisper-rs/coreml"]
+metal = ["whisper-rs/metal"]
+cuda = ["whisper-rs/cuda"]
 
 [dependencies]
-tauri = { version = "2", features = ["image-png", "macos-private-api", "tray-icon"] }
+tauri = { version = "2", features = ["image-png", "tray-icon"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -64,14 +50,19 @@ tauri-plugin-autostart = "2.5.1"
 tauri-plugin-process = "2.3.1"
 tauri-plugin-updater = "2.10.1"
 window-vibrancy = "0.8.0"
-whisper-rs = { version = "0.16.0", features = ["metal"] }
+whisper-rs = "0.16.0"
 reqwest = { version = "0.13.4", features = ["stream"] }
 audioadapter-buffers = "5.1.0"
 tauri-plugin-dialog = "2.7.2"
-# A second launch must not open a second Murmur. Two processes share one SQLite
-# file, and the second one's startup sweep marks the first one's LIVE session
-# orphaned before its own hotkey registration fails. See lib.rs.
 tauri-plugin-single-instance = "2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Foundation",
+    "Win32_System_Threading"
+] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 block2 = "0.6.2"
@@ -84,4 +75,3 @@ objc2-foundation = "0.3.2"
 
 [dev-dependencies]
 tokio = { version = "1.53.1", features = ["rt", "macros"] }
-

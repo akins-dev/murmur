@@ -1,4 +1,4 @@
-/*!
+﻿/*!
  * SOURCE OF TRUTH KEYWORDS: adapters, build_engine, build_model_store,
  *   available_engines, WHISPER_ENGINE_ID, default_engine_id
  * WHAT:  Barrel for every third-party integration, and the factory that
@@ -25,13 +25,21 @@ use crate::types::EngineId;
 pub mod cpal;
 pub mod events;
 pub mod http_models;
+#[cfg(target_os = "macos")]
 pub mod macos;
+#[cfg(target_os = "windows")]
+pub mod windows;
 pub mod rules;
 pub mod whisper;
 
 pub use events::TauriEventSink;
 pub use http_models::HttpModelStore;
 pub use whisper::{WhisperEngine, WHISPER_ENGINE_ID};
+
+#[cfg(target_os = "macos")]
+pub use macos::{play_feedback, FeedbackSound};
+#[cfg(target_os = "windows")]
+pub use windows::{play_feedback, FeedbackSound};
 
 /// The engine used unless a setting says otherwise.
 pub fn default_engine_id() -> EngineId {
@@ -109,8 +117,6 @@ mod tests {
 
     #[test]
     fn building_an_engine_does_not_load_the_model() {
-        // prepare() is where the ~1.5s load happens; construction must not be
-        // able to block the caller that is only wiring the app up.
         let engine = build_engine(&default_engine_id(), PathBuf::from("/tmp/ggml-unused.bin"))
             .expect("builds");
         assert!(!engine.is_ready());

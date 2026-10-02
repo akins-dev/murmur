@@ -109,7 +109,7 @@ impl SessionSettings {
 
         Self {
             model_id: read_choice(stored, keys::TRANSCRIPTION_MODEL)
-                .unwrap_or_else(|| "large-v3-turbo-q5_0".to_string()),
+                .unwrap_or_else(|| "small-q5_1".to_string()),
             language,
             input_device,
             capture_mode,

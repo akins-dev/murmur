@@ -378,8 +378,6 @@ struct PillMetrics {
     /// How long the window takes to leave, and how far it travels doing it.
     /// Read from the tokens like every other pill dimension so the motion and
     /// the design remain one fact rather than two that agree today.
-    exit_ms: f64,
-    exit_travel: f64,
     width: f64,
     height: f64,
     /**
@@ -399,8 +397,6 @@ impl PillMetrics {
         let read = design_token;
 
         Self {
-            exit_ms: read("--pill-exit-duration-ms"),
-            exit_travel: read("--pill-exit-travel"),
             width: read("--pill-width"),
             height: read("--pill-height"),
             width_failed: read("--pill-width-failed"),

@@ -78,6 +78,7 @@ export function Onboarding() {
    *  something. Local, like the tour: there is no backend state behind it. */
   const [invited, setInvited] = useState(false);
   const [finishError, setFinishError] = useState<AppError | null>(null);
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [liveStates, setLiveStates] = useState<Readonly<Record<string, ModelState>>>({});
 
   useTauriEvent(events.modelStateChanged, (payload) => {
@@ -87,10 +88,14 @@ export function Onboarding() {
   const micGranted =
     permissions.data?.find((report) => report.permission === "MICROPHONE")?.state === "GRANTED";
   const model = useMemo(() => {
-    const picked = pickModel(models.data ?? []);
+    const available = models.data ?? [];
+    let picked = pickModel(available);
+    if (selectedModelId) {
+      picked = available.find(m => m.descriptor.id === selectedModelId) ?? picked;
+    }
     if (!picked) return null;
     return { ...picked, state: liveStates[picked.descriptor.id] ?? picked.state };
-  }, [liveStates, models.data]);
+  }, [liveStates, models.data, selectedModelId]);
   const modelReady = model?.state.kind === "READY";
 
   const mode = dictationModeFrom(settings.data);
@@ -140,7 +145,7 @@ export function Onboarding() {
       ) : !micGranted ? (
         <StepShell
           title="Two permissions"
-          description="Murmur runs entirely on your Mac. It needs the microphone to hear you, and accessibility to paste for you."
+          description="Murmur runs entirely on your PC. It needs the microphone to hear you, and accessibility to paste for you."
         >
           <PermissionStep reports={permissions.data ?? []} onChanged={permissions.reload} />
         </StepShell>
@@ -149,7 +154,15 @@ export function Onboarding() {
           title="One model to download"
           description="This runs on your machine, so the model lives on your disk. It is downloaded once."
         >
-          <ModelStep model={model} onChanged={models.reload} />
+          <ModelStep
+            model={model}
+            models={models.data ?? []}
+            onSelectModel={async (id) => {
+              setSelectedModelId(id);
+              await unwrapCommand(() => commands.setSetting({ key: "transcription.model", value: { type: "CHOICE", value: id } }));
+            }}
+            onChanged={models.reload}
+          />
         </StepShell>
       ) : (
         <StepShell

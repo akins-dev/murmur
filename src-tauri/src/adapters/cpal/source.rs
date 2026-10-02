@@ -357,7 +357,7 @@ impl Drop for CpalCaptureSession {
 // ever created, used and dropped from the pipeline task on macOS/CoreAudio,
 // where the stream is safe to move. This is asserted rather than assumed: the
 // impl is scoped to macOS only, so another platform must revisit it.
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 unsafe impl Send for CpalCaptureSession {}
 
 impl CaptureSession for CpalCaptureSession {

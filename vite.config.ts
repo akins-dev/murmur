@@ -1,4 +1,3 @@
-import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -10,32 +9,24 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [react(), tailwindcss()],
 
-  // `@/` resolves to src/ — the shadcn convention, and the reason no component
-  // ever carries a `../../../` import path.
   resolve: {
     alias: {
-      "@": fileURLToPath(new URL("./src", import.meta.url)),
+      "@": "/src",
     },
   },
 
-  // Three windows, three bundles. The pill's must not contain the dashboard's
-  // charts or tables — it paints while inference runs (docs/02 §9).
   build: {
     rollupOptions: {
       input: {
-        dashboard: fileURLToPath(new URL("./index.html", import.meta.url)),
-        pill: fileURLToPath(new URL("./pill.html", import.meta.url)),
-        onboarding: fileURLToPath(new URL("./onboarding.html", import.meta.url)),
-        sidebar: fileURLToPath(new URL("./sidebar.html", import.meta.url)),
+        dashboard: "index.html",
+        pill: "pill.html",
+        onboarding: "onboarding.html",
+        sidebar: "sidebar.html",
       },
     },
   },
 
-  // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
-  //
-  // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
-  // 2. tauri expects a fixed port, fail if that port is not available
   server: {
     port: 1420,
     strictPort: true,
@@ -48,7 +39,6 @@ export default defineConfig(async () => ({
         }
       : undefined,
     watch: {
-      // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
     },
   },

@@ -76,7 +76,7 @@ const TOUR_SLIDES: readonly TourSlide[] = [
     media: "/onboarding/step-2.gif",
   },
   {
-    title: () => "Nothing leaves your Mac",
+    title: () => "Nothing leaves your PC",
     body: () => <>Every word is transcribed on your own machine. No account, no upload.</>,
     media: "/onboarding/step-3.gif",
   },

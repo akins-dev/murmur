@@ -304,7 +304,7 @@ fn build_capabilities() -> Vec<Capability> {
                     "Larger models are more accurate; smaller ones use less memory.",
                     SettingSection::Transcription,
                     ChoiceSource::Models,
-                    "large-v3-turbo-q5_0",
+                    "small-q5_1",
                 ),
                 SettingDef {
                     key: text(keys::LANGUAGE),

@@ -64,7 +64,7 @@ export function SelectControl({ setting }: { setting: SelectSetting }) {
       className={cn(CONTROL_CLASS, "max-w-56")}
     >
       {setting.options.map((option) => (
-        <option key={option.value} value={option.value} title={option.description} disabled={option.disabled}>
+        <option className="bg-opaque" key={option.value} value={option.value} title={option.description} disabled={option.disabled}>
           {option.label}
         </option>
       ))}

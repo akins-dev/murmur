@@ -64,7 +64,7 @@ export function PermissionStep({
               </p>
               <p className="text-caption text-text-secondary">
                 {report.state === "DENIED"
-                  ? `${copy.why} macOS only asks once, so this has to be turned on in System Settings.`
+                  ? `${copy.why} This has to be enabled in Windows Settings.`
                   : copy.why}
               </p>
             </div>

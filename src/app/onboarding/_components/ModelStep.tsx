@@ -23,10 +23,12 @@ import { ProgressBar } from "@/components/global";
 
 export interface ModelStepProps {
   model: ModelReport;
+  models: readonly ModelReport[];
+  onSelectModel: (id: string) => void;
   onChanged: () => void;
 }
 
-export function ModelStep({ model, onChanged }: ModelStepProps) {
+export function ModelStep({ model, models, onSelectModel, onChanged }: ModelStepProps) {
   const [progress, setProgress] = useState<DownloadProgress | null>(null);
   const [stage, setStage] = useState<{ message: string; fraction: number | null } | null>(null);
 
@@ -73,7 +75,7 @@ export function ModelStep({ model, onChanged }: ModelStepProps) {
         caption={
           stage?.message ??
           (optimizing
-            ? "Preparing the model for the Neural Engine. 15 to 60 seconds, once on this Mac."
+            ? "Preparing and optimizing the model. 15 to 60 seconds, once on this PC."
             : "Checking the download is intact.")
         }
       />
@@ -90,6 +92,23 @@ export function ModelStep({ model, onChanged }: ModelStepProps) {
 
   return (
     <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <label htmlFor="model-select" className="text-body font-medium text-text-primary">
+          Select a model
+        </label>
+        <select
+          id="model-select"
+          value={descriptor.id}
+          onChange={(e) => onSelectModel(e.target.value)}
+          className="h-8 rounded-input bg-sunken px-2 text-body text-text-primary outline-none focus:ring-1 focus:ring-text-primary border border-transparent hover:border-white/10"
+        >
+          {models.map((m) => (
+            <option className="bg-opaque" key={m.descriptor.id} value={m.descriptor.id}>
+              {m.descriptor.display_name}
+            </option>
+          ))}
+        </select>
+      </div>
       <p className="text-body text-text-secondary">
         {descriptor.description} {formatBytes(descriptor.size_bytes)} to download, about{" "}
         {descriptor.approx_ram_mb} MB of memory while running.

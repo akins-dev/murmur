@@ -1,129 +1,118 @@
-# Murmur
+# Murmur (Windows)
 
-Press a key, talk, press it again — your words are on the clipboard and pasted
-before you can look up.
+Press a key, talk, press it again — your words are on the clipboard and pasted before you can look up.
 
-Local-first speech to text for macOS. No account, no subscription, no word cap,
-and no audio ever leaves your machine.
+Local-first, blazing-fast speech-to-text for Windows. No account, no subscription, no word cap, and no audio ever leaves your machine.
+
+---
+
+> **Attribution & Lineage**:
+> Murmur was initially created by [Web Prodigies](https://github.com/webprodigies/murmur) for macOS.
+> This repository is a clone and port of that original project, focused on bringing full native Windows compatibility and ongoing improvements on top of it.
 
 ---
 
 ## What it does
 
-- **Global hotkey** — ⌥Space anywhere. Toggle, or hold-to-talk.
-- **Transcribes while you speak**, not after you stop, so finishing is as fast
-  after a five-minute monologue as after a five-second one.
-- **Pastes into whatever had focus**, and puts your clipboard back afterwards.
-- **Escape to cancel**, with a three-second countdown. Press Escape again and
-  the recording resumes with nothing lost.
+- **Global hotkey** — `Alt+Space` anywhere (configurable). Toggle, or hold-to-talk (push-to-talk).
+- **Transcribes while you speak**, not after you stop, so finishing is as fast after a five-minute monologue as after a five-second one.
+- **Pastes into whatever had focus**, and restores your previous clipboard content afterwards.
+- **Escape to cancel**, with a three-second countdown. Press Escape again and the recording resumes with nothing lost.
 - **99 languages**, auto-detected or pinned.
-- **A custom dictionary** for the names and jargon the model gets wrong — used
-  both to bias recognition and to correct the output.
+- **A custom dictionary** for names, acronyms, and jargon the model gets wrong — used both to bias recognition and correct output.
 - **Searchable local history**, so a failed paste is never a lost thought.
 - **Honest stats**, including the p50/p95 latency the app actually achieves.
 
-Everything runs on your Mac. The only network requests Murmur ever makes are the
-first-run model download and an optional update check, and both are visible and
-both can be turned off.
+Everything runs locally on your PC. The only network requests Murmur ever makes are the first-run model download and an optional update check — both are visible and both can be turned off.
+
+---
 
 ## Requirements
 
-- macOS 13 or later, Apple Silicon or Intel
-- ~600 MB of disk for the default model
+- **Operating System**: Windows 10 or Windows 11 (64-bit)
+- **Disk Space**: ~600 MB of free disk space for the default Whisper model
+- **Audio Input**: Any working microphone or headset
+
+---
 
 ## Running it
 
-```bash
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) (v18+) and [pnpm](https://pnpm.io/)
+- [Rust](https://rustup.rs/) (`x86_64-pc-windows-msvc` toolchain)
+- Visual Studio C++ Build Tools / Desktop development with C++
+
+### Development
+
+```powershell
 pnpm install
 pnpm tauri dev
 ```
 
-First launch opens setup: grant the microphone, download the model, and test the
-hotkey. After that Murmur lives in the menu bar and you will not see a window
-again unless you open one.
+First launch opens setup:
+1. Verify microphone access
+2. Download the local Whisper model
+3. Test your hotkey (`Alt+Space`)
+
+After setup, Murmur minimizes quietly into your **Windows System Tray** (Notification Area). You will not see a window again unless you open the dashboard or settings.
+
+---
 
 ## Building a release
 
-```bash
+To build a production Windows installer:
+
+```powershell
 pnpm tauri build
 ```
 
-The bundle lands in `src-tauri/target/release/bundle/` — a `.app`, a `.dmg`,
-and an updater archive.
+The bundle lands in `src-tauri/target/release/bundle/nsis/` as a standalone Windows NSIS setup installer (`.exe`).
 
-**Signing the updater archive.** Because a public key is configured, Tauri also
-signs the update artifact, and it needs the matching private key:
+---
 
-```bash
-TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.murmur-updater.key)" \
-TAURI_SIGNING_PRIVATE_KEY_PASSWORD="" \
-  pnpm tauri build
-```
+## Windows Architecture & Compatibility
 
-Both variables are required. Setting the key without the password makes Tauri
-prompt for one interactively, which fails in any non-interactive shell with a
-misleading "incorrect password" error — the password is empty, it simply had no
-way to tell you so.
+Murmur was re-engineered for Windows native support:
 
-Without either, the `.app` and `.dmg` still build correctly and only the update
-artifact goes unsigned. In CI both come from repository secrets.
+- **Audio Capture**: Uses [CPAL](https://github.com/RustAudio/cpal) (Cross-Platform Audio Library) with WASAPI for low-latency, glitch-free microphone capture on Windows.
+- **Transcription**: Powered by [whisper.rs](https://github.com/tazz4843/whisper-rs) (GGML Whisper engine), executing CPU/GPU inference entirely on your hardware.
+- **Input Injection**: Employs Windows `SendInput` API and the Windows clipboard (`arboard`) to paste transcription output directly into the active foreground window without requiring macOS accessibility grants.
+- **System Tray**: Native Windows Taskbar Notification Area integration.
+- **Permissions**: Desktop apps on Windows have direct access to audio devices and keyboard hooks. If microphone permissions are disabled at the OS level, Murmur provides direct links to the Windows Settings app (`ms-settings:privacy-microphone`).
 
-> **Back that private key up somewhere you will still have in five years.**
-> It is the only thing that can sign an update. If it is lost, every existing
-> installation is permanently stranded on whatever version it has — there is no
-> recovery, because the public key is compiled into the apps already out there.
-
-## Permissions, and what happens without them
-
-| Permission | Needed for | Without it |
-|---|---|---|
-| Microphone | Recording | Murmur cannot record. Required. |
-| Accessibility | Pasting for you | Everything still works — text goes to the clipboard instead. |
-
-macOS shows each of these prompts **once per app**. If you dismiss one, the
-dialog never comes back, so Murmur takes you straight to the right System
-Settings pane instead of asking again.
-
-### If Accessibility keeps forgetting you granted it
-
-macOS keys permission grants to the bundle id **plus the code signature**.
-Builds here are ad-hoc signed, which produces a new signature every time, so
-**every rebuild looks like a different app** and the Accessibility grant is
-lost. Pasting silently degrades to clipboard-only and nothing explains why.
-
-That is a development annoyance, not a bug, and it does not affect a released
-build. If you are rebuilding often, create one self-signed code-signing
-certificate in Keychain Access and sign every build with that same identity —
-the signature then stays stable and macOS stops forgetting. `docs/03 §3.4` has
-the detail.
+---
 
 ## For developers
 
-The architecture is documented in `docs/`, and `CLAUDE.md` is the rulebook.
-Start with `docs/00-START-HERE.md`; read `docs/06-CONVENTIONS-AND-GREP.md`
-before writing your first file, because navigation here works through a
-comment-based search index rather than by reading the tree:
+The architecture is documented in `docs/`, and `CLAUDE.md` is the project rulebook.
+Start with `docs/00-START-HERE.md` and read `docs/06-CONVENTIONS-AND-GREP.md`.
+
+Navigate the codebase with the source-of-truth grep index:
 
 ```bash
 pnpm sot SessionState      # which files own this symbol
 pnpm sot:show AudioChunk   # the same, with each file's header
 ```
 
-Two ideas carry the codebase. **The registry** (`src-tauri/src/registry/`) is one
-table describing every feature — adding an entry wires up its settings UI,
-permission preflight, nav placement, hotkey and metrics at once. **The command
-factory** (`src-tauri/src/ipc/factory.rs`) is the single function every IPC call
-passes through, so validation, permissions, reentrancy, tracing and error
-mapping have one implementation instead of one per handler.
+### TypeScript Bindings & Typechecks
 
-Types cross to TypeScript through `tauri-specta`: `src/lib/bindings.ts` is
-generated by `cargo test` and must never be hand-edited.
+Types cross to TypeScript through `tauri-specta`. The TypeScript definitions in `src/lib/bindings.ts` are generated from Rust code:
 
-```bash
-cargo test --manifest-path src-tauri/Cargo.toml   # also regenerates bindings
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml   # regenerates bindings
 pnpm typecheck
 ```
 
-## Licence
+---
 
-MIT. See `LICENSE`.
+## Acknowledgments & Credits
+
+- Originally conceived and created by [Web Prodigies](https://github.com/webprodigies/murmur).
+- Windows compatibility, audio layer, and Windows platform adapter improvements by [Akins-dev](https://github.com/akins-dev).
+
+---
+
+## License
+
+MIT License. See [LICENSE](LICENSE).
